@@ -386,12 +386,16 @@ gameflow and pushes `UI_InGame_WorldMap.fng` with `0x555E80`. The pause menu's
 map opens the same package. The mod does not patch that: the game's own map is
 what pauses the game and owns the screen, so it is left to open, and the mod
 opens its expanded map on top, full screen, with keyboard and mouse captured
-for the page. Closing ours closes the game's too, and the game goes on.
+for the page. Closing ours sends the game's map the pad's "back", and it
+closes itself and the game goes on. While it closes it still reads as open,
+so the mod waits for it to go (up to 1.5 s) before it would open its own
+again.
 
 | | |
 |---|---|
 | `0x52CF60` | cdecl(package name) -> al: the package is open |
-| `0x5379A0` | cdecl(package name): closes it (through `0x5376F0` on `[0x8384C4]`) |
+| `PAD_BACK` | FEHashUpper `911AB364`: the "back" message (Esc, the pad's B). Sent to the package with `speed.game.sendFrontendMessage`, the world map screen handles it (`0x4EF642` and others) and leaves the way it always does, resuming the game |
+| `0x5379A0` | cdecl(package name): pulls the package off (through `0x5376F0`). **Not** the way to close the map: it was the first try, and it left the screen half torn down - the map's buttons on screen and the game stuck |
 | `0x496390` | cdecl(category, off): the legend's filter setter (the getter is `0x4964D0`) |
 
 The legend of the expanded map writes the game's filter, so the pause map, the

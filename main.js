@@ -505,15 +505,20 @@ function estiloIcones() {
 // seu por cima, em tela cheia, com teclado e mouse na pagina; ao fechar o seu,
 // fecha o do jogo tambem, e o jogo segue.
 //   0x52CF60  cdecl(pacote) -> al: o pacote esta aberto
-//   0x5379A0  cdecl(pacote): fecha o pacote
+//   PAD_BACK  a mensagem de "voltar" do controle (FEHashUpper 911AB364), a
+//             que o Esc gera: a tela do mapa a trata (0x4EF642...) e sai
+//             sozinha, retomando o jogo. Fechar o pacote a forca (0x5379A0)
+//             foi a primeira tentativa: tirava o pacote e deixava a tela
+//             pela metade, os botoes do mapa na tela e o jogo travado.
 //   0x496390  cdecl(categoria, desligada): o filtro da legenda (o setter do
 //             0x4964D0), para a legenda do mapa expandido mexer no do jogo
 const WORLD_MAP_PKG = 'UI_InGame_WorldMap.fng';
 const FE_PACKAGE_OPEN = 0x52CF60;
-const FE_PACKAGE_CLOSE = 0x5379A0;
+const PAD_BACK = 0x911AB364;
+const CLOSE_WAIT_MS = 1500;   // quanto esperar o mapa do jogo sair antes de reabrir o nosso
 const CATEGORY_SET = 0x496390;
 const BIG_MS = 100;
-let bigOpen = false, bigLast = 0;
+let bigOpen = false, bigLast = 0, closingSince = 0;
 
 function mapaDoJogoAberto() {
   return (speed.call(FE_PACKAGE_OPEN, [WORLD_MAP_PKG], { ret: 'int' }) & 0xFF) !== 0;
@@ -530,13 +535,23 @@ function fechaMapa(fechaODoJogo) {
   bigOpen = false;
   speed.ui.capture(false);
   speed.ui.send('bigmap', false);
-  if (fechaODoJogo && mapaDoJogoAberto()) speed.call(FE_PACKAGE_CLOSE, [WORLD_MAP_PKG], { ret: 'void' });
+  if (fechaODoJogo && mapaDoJogoAberto()) {
+    speed.game.sendFrontendMessage(PAD_BACK, WORLD_MAP_PKG);
+    closingSince = speed.now();
+  }
 }
 
 function confereMapaGrande(now) {
   if (now - bigLast < BIG_MS) return;
   bigLast = now;
   const aberto = speed.game.state() === 6 && mapaDoJogoAberto();
+  // pedido o fechamento, espera o mapa do jogo sair; se nao sair, reabre o
+  // nosso (melhor do que deixar o jogador numa tela sem controle)
+  if (closingSince) {
+    if (!aberto) closingSince = 0;
+    else if (now - closingSince < CLOSE_WAIT_MS) return;
+    else closingSince = 0;
+  }
   if (aberto && !bigOpen) abreMapa();
   else if (!aberto && bigOpen) fechaMapa(false);   // o do jogo fechou por conta propria
 }
