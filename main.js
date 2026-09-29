@@ -866,6 +866,7 @@ speed.on('ui:ready', () => {
   speed.ui.send('shape', shapeMode());
   speed.ui.send('edge', edgeMode());
   speed.ui.send('size', sizePercent());
+  speed.ui.send('route-colour', speed.settings.get('routeColour', false) === true);
   pageReady = true;
   visible = false;           // the page reloaded: send the state again
   track = null;
@@ -921,7 +922,13 @@ speed.on('frame', () => {
 // the style goes to the page; turn and zoom are read on every pose.
 speed.on('settings', () => {
   applyGpsArrow();
-  if (pageReady) { speed.ui.send('style', iconStyle()); speed.ui.send('shape', shapeMode()); speed.ui.send('edge', edgeMode()); speed.ui.send('size', sizePercent()); }
+  if (pageReady) {
+    speed.ui.send('style', iconStyle());
+    speed.ui.send('shape', shapeMode());
+    speed.ui.send('edge', edgeMode());
+    speed.ui.send('size', sizePercent());
+    speed.ui.send('route-colour', speed.settings.get('routeColour', false) === true);
+  }
 });
 
 speed.command('minimap', () => {

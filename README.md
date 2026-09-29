@@ -94,6 +94,7 @@ loader between sessions:
 | Icons | Pins with icons (default), or Native: the game's circles and colours |
 | Turn with | the map turns with the Camera (default) or with the Car |
 | Dynamic zoom | the zoom opens up with speed (default), or stays |
+| Route in the event's colour | the GPS route takes its destination's marker colour instead of the light blue (off by default) |
 | Blue GPS arrow | Hide (default) or Show the HUD's blue GPS arrow |
 
 `/minimap` in the console shows the state (position, track, career, GPS).

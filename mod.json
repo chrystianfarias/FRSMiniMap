@@ -102,6 +102,15 @@
       "description": "The zoom opens up with speed, down to a limit"
     },
     {
+      "id": "routeColour",
+      "type": "toggle",
+      "label": "Route in the event's colour",
+      "default": false,
+      "on": "Yes",
+      "off": "No",
+      "description": "The GPS route takes the colour of its destination's marker instead of the light blue"
+    },
+    {
       "type": "section",
       "label": "HUD"
     },

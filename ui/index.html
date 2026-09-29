@@ -122,7 +122,9 @@
   .route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .route path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
   .route-edge { stroke: rgba(0, 0, 0, 0.55); stroke-width: 2.6; }
-  .route-line { stroke: #00e5ff; stroke-width: 1.5; }
+  /* --route: the destination's colour with the "route in the event's colour"
+     option, else the GPS's light blue (set on the host by applyFocus) */
+  .route-line { stroke: var(--route, #00e5ff); stroke-width: 1.5; }
   .ev .disc { fill: var(--c); }
   /* The pin's tip (bottom centre) sits on the rim and points at the target; the
      pin turns around it, and the icon turns back to stay upright. */
@@ -230,7 +232,7 @@
   .bigroute { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   .bigroute path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
   .bigroute .route-edge { stroke: rgba(0, 0, 0, 0.55); stroke-width: 2.6; }
-  .bigroute .route-line { stroke: #00e5ff; stroke-width: 1.5; }
+  .bigroute .route-line { stroke: var(--route, #00e5ff); stroke-width: 1.5; }
   .bigpin {
     position: absolute; left: 0; top: 0;
     /* the pin, with the viewBox 80 x 72 margin; the tip on the point */
@@ -587,7 +589,17 @@
       }
     }
     for (const e of events) e.el.style.display = routing() && e !== focus ? 'none' : '';
+    applyRouteColour();
   }
+  // The route in its destination's colour (the option), or the default blue
+  // when it is off or the destination is not one of the markers.
+  let routeByEvent = false;
+  function applyRouteColour() {
+    const host = root.host || document.documentElement;
+    if (routeByEvent && focus && focus.colour) host.style.setProperty('--route', focus.colour);
+    else host.style.removeProperty('--route');
+  }
+  frsmodloader.on('route-colour', (on) => { routeByEvent = !!on; applyRouteColour(); });
   function checkArrival(p) {
     if (!route || arrived) return;
     const t = route.target;
