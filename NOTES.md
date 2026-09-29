@@ -347,7 +347,7 @@ or third row, each with both signs) against the car's heading while driving
 over 30 km/h with the camera behind - 0.94 for this one. The measurement was
 done once and the result is now fixed in the code, so the radar turns with the
 camera from the first frame at any speed. The player's arrow turns by the car's
-heading minus the camera's; the "Girar com: Carro" option goes back to turning with
+heading minus the camera's; the "Turn with: Car" option goes back to turning with
 the car.
 
 ### The HUD's GPS arrow
@@ -360,7 +360,7 @@ the controller's route state (`ctrl+0x3E4` 1 or 2), finds a point ahead on the
 route and draws through `0x5EAC90`. Its only caller, `0x63176A`, ignores the
 result, so hiding the arrow is making the function return at once
 (`C2 04 00` over `55 8B EC`) and showing it again is putting the bytes back.
-The minimap does that from the "Seta azul do GPS" option, and only if the
+The minimap does that from the "Blue GPS arrow" option, and only if the
 function starts with one of those two sequences.
 
 ### The maps straight from the pack's zip

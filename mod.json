@@ -1,73 +1,73 @@
 {
   "id": "frsminimap",
   "name": "FRSMiniMap",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Chrystian Farias",
   "main": "main.js",
   "ui": "ui/index.html",
   "enabled": true,
-  "description": "Minimapa em perspectiva 3D e mapa expandido no M, com os eventos da carreira, rota do GPS e adversarios.",
+  "description": "A 3D minimap and an expanded map on M, with the career events, the GPS route and the other racers.",
   "thumb": "thumb.jpg",
   "settings": [
     {
       "type": "section",
-      "label": "Minimapa"
+      "label": "Minimap"
     },
     {
       "id": "shape",
       "type": "choice",
-      "label": "Formato",
-      "default": "redondo",
+      "label": "Shape",
+      "default": "round",
       "options": [
         {
-          "value": "redondo",
-          "label": "Redondo"
+          "value": "round",
+          "label": "Round"
         },
         {
-          "value": "retangular",
-          "label": "Retangular"
+          "value": "rectangular",
+          "label": "Rectangular"
         }
       ],
-      "description": "Redondo ou retangular (como o do GTA V)"
+      "description": "Round, or rectangular as GTA V's"
     },
     {
       "id": "edge",
       "type": "choice",
-      "label": "Borda",
-      "default": "infinita",
+      "label": "Edge",
+      "default": "fade",
       "options": [
         {
-          "value": "infinita",
-          "label": "Infinita"
+          "value": "fade",
+          "label": "Infinite"
         },
         {
-          "value": "solida",
-          "label": "Solida"
+          "value": "solid",
+          "label": "Solid"
         }
       ],
-      "description": "Infinita: o mapa se dissolve nas bordas. Solida: borda marcada, com contorno"
+      "description": "Infinite: the map fades out at the edges. Solid: a clear border with an outline"
     },
     {
       "id": "icons",
       "type": "choice",
-      "label": "Icones",
+      "label": "Icons",
       "default": "pin",
       "options": [
         {
           "value": "pin",
-          "label": "Pinos"
+          "label": "Pins"
         },
         {
-          "value": "nativo",
-          "label": "Nativos"
+          "value": "native",
+          "label": "Native"
         }
       ],
-      "description": "Pinos com icone e as cores do mod, ou os circulos e as cores do minimapa do jogo"
+      "description": "Pins with the mod's icons and colours, or the game's own circles and colours"
     },
     {
       "id": "turn",
       "type": "choice",
-      "label": "Girar com",
+      "label": "Turn with",
       "default": "camera",
       "options": [
         {
@@ -75,20 +75,20 @@
           "label": "Camera"
         },
         {
-          "value": "carro",
-          "label": "Carro"
+          "value": "car",
+          "label": "Car"
         }
       ],
-      "description": "O mapa gira com a camera (como no GTA) ou com o carro"
+      "description": "The map turns with the camera (as in GTA) or with the car"
     },
     {
       "id": "dynamicZoom",
       "type": "toggle",
-      "label": "Zoom dinamico",
+      "label": "Dynamic zoom",
       "default": true,
-      "on": "Sim",
-      "off": "Nao",
-      "description": "O zoom abre com a velocidade, ate um limite"
+      "on": "Yes",
+      "off": "No",
+      "description": "The zoom opens up with speed, down to a limit"
     },
     {
       "type": "section",
@@ -97,11 +97,11 @@
     {
       "id": "gpsArrow",
       "type": "toggle",
-      "label": "Seta azul do GPS",
+      "label": "Blue GPS arrow",
       "default": false,
-      "on": "Mostrar",
-      "off": "Esconder",
-      "description": "O marcador azul que flutua a frente do carro quando ha rota no GPS"
+      "on": "Show",
+      "off": "Hide",
+      "description": "The blue marker that floats ahead of the car while the GPS has a route"
     }
   ]
 }

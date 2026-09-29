@@ -1,0 +1,67 @@
+FRSMiniMap
+Copyright (c) 2025 Chrystian Farias
+
+This work is licensed under the Creative Commons
+Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
+
+Full legal text: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+Summary:        https://creativecommons.org/licenses/by-nc/4.0/
+
+You may use, modify and redistribute this, including your own forks and
+derivative mods, as long as you credit Chrystian Farias and link back to
+https://github.com/chrystianfarias/SpeedLoader, and as long as it is not for
+commercial purposes. For a commercial license, ask:
+https://buymeacoffee.com/chrystianfarias
+
+WHAT YOU MAY DO
+
+  * Use, run and study this mod, for any non-commercial purpose.
+  * Copy and redistribute it, in any medium or format.
+  * Modify it and distribute your modified versions (forks, derivative
+    mods).
+
+UNDER TWO CONDITIONS
+
+  1. Attribution. You must give appropriate credit to Chrystian Farias,
+     link back to https://github.com/chrystianfarias/SpeedLoader, and
+     indicate if changes were made. A credit line such as:
+
+         Based on FRSMiniMap by Chrystian Farias
+         https://github.com/chrystianfarias/SpeedLoader
+
+     in the README, the mod description or the video description, is
+     enough. You may not suggest that the author endorses you or your use
+     of the work.
+
+  2. NonCommercial. You may not use this work, in whole or in part, for
+     commercial purposes. That includes selling it, selling access to it,
+     bundling it with a paid product or service, using it in paid mod
+     packs, paywalled or subscription distribution, and any distribution
+     primarily intended for or directed toward commercial advantage or
+     monetary compensation. Free public distribution, and use in videos or
+     streams that are not built around selling this mod, are fine.
+
+     If you want a commercial license, ask the author.
+
+NO WARRANTY
+
+To the extent permitted by law, this mod is provided "as is", without
+warranty of any kind, express or implied, including but not limited to the
+warranties of merchantability, fitness for a particular purpose and
+non-infringement. In no event shall the author be liable for any claim,
+damages or other liability arising from, out of or in connection with the
+mod or its use.
+
+THIRD PARTIES
+
+This mod is not affiliated with, endorsed by, or sponsored by Electronic
+Arts. "Need for Speed" and "Underground 2" are trademarks of their
+respective owners. No game asset or game code is distributed here: the maps
+and icons of the game are read from the player's own game files at runtime.
+
+Parts that keep their own licenses:
+  * Marker icons (car, flag-checkered, house, spray-can, star, volume,
+    wrench): Font Awesome Free by Fonticons, Inc., CC BY 4.0
+    (https://fontawesome.com/license/free); the notice is kept in each file.
+  * "NFSU2 Detailed Map" by JeansBig: not included. The player drops the
+    pack's zip into the mod's folder, and it stays under its author's terms.

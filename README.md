@@ -36,13 +36,13 @@ legend's filters, the GPS route, the other racers.
 
 ## Requirements
 
-> **FRSModLoader is required.** FRSMiniMap is a mod *for* the loader, not a
+> **FRSModLoader v1.2 or later is required.** FRSMiniMap is a mod *for* the loader, not a
 > standalone `.asi`: without FRSModLoader installed in the game it does
 > nothing at all. Install the loader first.
 
 - **NFS Underground 2** v1.2 NTSC (`SPEED2.EXE`).
-- **[FRSModLoader](https://github.com/chrystianfarias/SpeedLoader)**, a recent
-  build: the minimap reads the game's textures and data through the loader
+- **[FRSModLoader](https://github.com/chrystianfarias/SpeedLoader) v1.2 or
+  later**: the minimap reads the game's textures and data through the loader
   (`http://nfsu2.tex/`, `http://nfsu2.data/`), and its options live in the
   loader's Options > Mods menu. The loader's release is dropped into the
   folder with `SPEED2.EXE` (it brings its own `dinput8.dll`, Ultimate ASI
@@ -103,12 +103,12 @@ loader between sessions:
 
 | Option | |
 |---|---|
-| Formato | round (default), or a rectangle as GTA V's |
-| Borda | infinite: the map fades out at the edges (default); or solid, with an outline |
-| Icones | pins with icons (default), or the game's circles and colours |
-| Girar com | the map turns with the camera (default) or with the car |
-| Zoom dinamico | zoom opens with speed (default), or stays |
-| Seta azul do GPS | hide (default) or show the HUD's blue GPS arrow |
+| Shape | Round (default), or Rectangular as GTA V's |
+| Edge | Infinite: the map fades out at the edges (default); or Solid, with an outline |
+| Icons | Pins with icons (default), or Native: the game's circles and colours |
+| Turn with | the map turns with the Camera (default) or with the Car |
+| Dynamic zoom | the zoom opens up with speed (default), or stays |
+| Blue GPS arrow | Hide (default) or Show the HUD's blue GPS arrow |
 
 `/minimap` in the console shows the state (position, track, career, GPS).
 
@@ -132,7 +132,20 @@ tools/                minimap_calibrate.py (measures calibration.json);
                       minimap_dev.py (dumps the map data to look at while
                       developing)
 NOTES.md              what was found in the game, and why the mod does what it does
+release.ps1           packs a release zip into release/ (not in git)
 ```
+
+## License
+
+**CC BY-NC 4.0** - Copyright (c) 2025 Chrystian Farias.
+
+You may use, modify and redistribute this, including your own forks and
+derivative mods, as long as you credit Chrystian Farias and link back to
+<https://github.com/chrystianfarias/SpeedLoader>, and as long as it is not for
+commercial purposes. For a commercial license, ask:
+<https://buymeacoffee.com/chrystianfarias>. See [LICENSE](LICENSE).
+
+If the mod helps you, you can [buy me a coffee](https://buymeacoffee.com/chrystianfarias).
 
 ## Credits
 

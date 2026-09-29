@@ -1,27 +1,27 @@
-// FRSMiniMap - minimapa em perspectiva 3D para NFS Underground 2 (FRSModLoader).
+// FRSMiniMap - a 3D perspective minimap for NFS Underground 2 (FRSModLoader).
 //
-// Este lado roda no jogo (QuickJS, a cada frame) e le a memoria; a pagina
-// (ui/index.html) so desenha. O que vai para ela:
+// This side runs in the game (QuickJS, every frame) and reads memory; the page
+// (ui/index.html) only draws. What goes to it:
 //
-//   'track'   o TrackInfo da pista carregada: id, regiao, calibracao do mapa
-//   'pose'    a cada frame: posicao e rumo do jogador, rumo da camera,
-//             velocidade (zoom dinamico) e os adversarios
-//   'career'  o que o mapa do pause mostra agora (corridas e lojas), com os
-//             filtros da legenda e os eventos especiais, perguntado ao jogo
-//   'route'   a rota do GPS: os nos lidos da tabela que o jogo tem na memoria
-//   'style'   o estilo dos marcadores
+//   'track'   the loaded track's TrackInfo: id, region, map calibration
+//   'pose'    every frame: the player's position and heading, the camera's
+//             heading, speed (dynamic zoom) and the rivals
+//   'career'  what the pause map shows now (races and shops), with the
+//             legend's filters and the special events, asked of the game
+//   'route'   the GPS route: the nodes read from the table the game holds in memory
+//   'style'   the marker style
 //
-// E mexe no jogo em tres pontos, sempre conferindo os bytes antes:
+// And it changes the game in three places, always checking the bytes first:
 //
-//   - esconde o minimapa original (os objetos FEng dele, e um desvio no
-//     FEngSetVisible para a animacao nao os mostrar de novo);
-//   - opcionalmente, esconde a seta azul do GPS no HUD.
+//   - hides the original minimap (its FEng objects, and a detour in
+//     FEngSetVisible so the animation does not show them again);
+//   - optionally, hides the blue GPS arrow on the HUD.
 //
-// Pose do jogador (a mesma que o spawn-car usa):
+// The player's pose (the same one spawn-car uses):
 //
-//   fisica + 0x20  -> pose
-//   pose   + 0x20  posicao x, y, z (z pra cima; x, y e o plano do mapa)
-//   pose   + 0x30  matriz de rotacao; as LINHAS sao os eixos, linha 0 a frente
+//   physics + 0x20  -> pose
+//   pose    + 0x20  position x, y, z (z up; x, y is the map plane)
+//   pose    + 0x30  rotation matrix; the ROWS are the axes, row 0 forward
 //
 // The options live in Options > Mods (mod.json's "settings"): icons, turn,
 // dynamic zoom and the GPS arrow. /minimap in the console prints the state
@@ -31,25 +31,25 @@ const PHYSICS_POSE  = 0x20;
 const POSE_POSITION = 0x20;
 const POSE_ROTATION = 0x30;
 
-// A pista carregada: [0x883DAC] e o TrackInfo que 0x57F240 escolhe ao montar
-// o mundo ou a corrida (GetTrackInfo sobre TheRaceParameters). Registros de
-// 296 bytes no chunk 0x34201 do GLOBALB (NOTES.md, "The minimap"):
+// The loaded track: [0x883DAC] is the TrackInfo 0x57F240 picks when it builds
+// the world or the race (GetTrackInfo over TheRaceParameters). 296-byte
+// records in chunk 0x34201 of GLOBALB (NOTES.md, "The minimap"):
 //
-//   +0x40  char[]  regiao ("L4RA")
-//   +0x8A  u16     id da pista: 4000 e o free roam da cidade
-//   +0xAC  f32     calibracao do TRACKMAP: x do canto superior esquerdo
-//   +0xB0  f32     y do canto superior esquerdo
-//   +0xB4  f32     largura do mapa, em unidades do mundo
-//   +0xC0  f32     zoom do radar: 1.5 cidade, 2 drag, 1 drift e Street X
+//   +0x40  char[]  region ("L4RA")
+//   +0x8A  u16     track id: 4000 is the city's free roam
+//   +0xAC  f32     TRACKMAP calibration: x of the top left corner
+//   +0xB0  f32     y of the top left corner
+//   +0xB4  f32     map width, in world units
+//   +0xC0  f32     radar zoom: 1.5 city, 2 drag, 1 drift and Street X
 const TRACK_INFO_PTR = 0x883DAC;
 
-let pista = null;          // a ultima enviada, para so mandar quando mudar
+let track = null;          // the last one sent, to send only when it changes
 
-// Os adversarios. Todo carro no mundo esta numa lista encadeada (NOTES.md,
-// "Spawning a car"): [0x890080] e o sentinela, +0 o primeiro, e cada carro
-// aponta o proximo no seu +0. O carro do jogador e o mesmo objeto que
-// speed.game.car() devolve. car+0x14 aponta o slot, e slot+0x04 diz quem e:
-// 1 jogador, 2 corredor, 3 trafego.
+// The rivals. Every car in the world is in a linked list (NOTES.md,
+// "Spawning a car"): [0x890080] is the sentinel, +0 the first, and each car
+// points to the next at its +0. The player's car is the same object
+// speed.game.car() returns. car+0x14 points to the slot, and slot+0x04 says who
+// it is: 1 player, 2 racer, 3 traffic.
 const WORLD_CAR_LIST = 0x890080;
 const CAR_SLOT       = 0x14;
 const SLOT_TYPE      = 0x04;
@@ -63,29 +63,29 @@ const CAR_WORLD_GATE = 0x5C0;
 const CAR_SIM        = 0x3C;
 const SIM_BODY       = 0x68;
 
-// Onde o carro guarda a posicao no mundo: o NOTES diz car+0x510 (o que o
-// construtor escreve) e o spawn-car usa car+0x60. Em vez de apostar, o mod
-// compara os dois com a pose do jogador, que ja se sabe certa, e fica com o
-// que bater. null enquanto nao decidiu.
+// Where the car keeps its world position: NOTES says car+0x510 (what the
+// constructor writes) and spawn-car uses car+0x60. Rather than bet, the mod
+// compares both with the player's pose, which is known to be right, and keeps
+// the one that matches. null until decided.
 const CAR_POS_CANDIDATES = [0x60, 0x510];
 let carPos = null;
 
-// rumo de cada adversario, tirado do movimento: { [carro]: { x, y, h } }
-let rastro = {};
+// each rival's heading, taken from its movement: { [car]: { x, y, h } }
+let trail = {};
 
-// O que a carreira mostra agora: a mesma pergunta que o mapa do pause faz.
-// O construtor do mapa (0x4E0440) percorre a tabela de eventos do mapa e
-// desenha so os que 0x533110 aprova (NOTES.md, "The minimap"):
+// What the career shows now: the same question the pause map asks.
+// The map's constructor (0x4E0440) walks the map's event table and draws only
+// the ones 0x533110 approves (NOTES.md, "The minimap"):
 //
-//   0x85AD40  64 entradas de 0x18 bytes, validas com [0x850078] == 1;
-//             +0 zero = vaga, +4 a corrida (registro de 136 bytes da carreira,
-//             +0x28 o hash do gatilho), +8 a loja (160 bytes, +0x3C o hash
-//             da zona)
-//   0x533110  thiscall(entrada) -> al: corrida disponivel / loja do estagio
-//             atual e ja descoberta (0x5003B0(hash) -> +4 == 1)
+//   0x85AD40  64 entries of 0x18 bytes, valid when [0x850078] == 1;
+//             +0 zero = empty, +4 the race (136-byte career record,
+//             +0x28 the trigger's hash), +8 the shop (160 bytes, +0x3C the
+//             zone's hash)
+//   0x533110  thiscall(entry) -> al: race available / shop of the current
+//             stage and already discovered (0x5003B0(hash) -> +4 == 1)
 //
-// So consulta; o mapa do pause chama o mesmo caminho ao abrir. Devolve o
-// resultado em AL, com lixo no resto de EAX: por isso ret 'int' e & 0xFF.
+// Only queries; the pause map calls the same path when it opens. The result
+// is in AL, with junk in the rest of EAX: hence ret 'int' and & 0xFF.
 const MAP_EVENTS       = 0x85AD40;
 const MAP_EVENTS_READY = 0x850078;
 const MAP_EVENT_SIZE   = 0x18;
@@ -93,27 +93,27 @@ const MAP_EVENT_COUNT  = 64;
 const MAP_EVENT_SHOWN  = 0x533110;
 const RACE_TRIGGER     = 0x28;
 const SHOP_ZONE        = 0x3C;
-const CAREER_MS        = 500;    // os filtros mudam no mapa do pause; meio segundo basta
+const CAREER_MS        = 500;    // the filters change on the pause map; half a second is enough
 
 let careerLast = 0;
 let careerSent = '';
 
 
-// O minimapa do jogo, escondido. Ele nao e um desenho a parte: sao objetos
-// FEng soltos no pacote do HUD (HUD_SingleRace.fng; HUD_Short_Track.fng nas
-// pistas fechadas), que o construtor do minimapa (0x4F73E0) acha pelo nome.
-// Os nomes sao os que ele procura, mais os indicadores de evento e loja da
-// tabela 0x7F4348 (<PREFIXO><n>, de 0), e cinco objetos sem nome conhecido, pelo
-// hash, lidos do proprio pacote: o fundo, os tres icones de largada e o grupo
-// do seletor de GPS. Nada alem disso e tocado.
+// The game's minimap, hidden. It is not a separate drawing: it is loose FEng
+// objects in the HUD package (HUD_SingleRace.fng; HUD_Short_Track.fng on
+// closed tracks), which the minimap's constructor (0x4F73E0) finds by name.
+// The names are the ones it looks for, plus the event and shop indicators of
+// table 0x7F4348 (<PREFIX><n>, from 0), and five objects with no known name, by
+// hash, read from the package itself: the background, the three start icons
+// and the GPS selector group. Nothing else is touched.
 //
-//   0x52CEF0  cdecl(nome do pacote) -> pacote carregado, ou 0
-//   0x5379C0  cdecl(nome do pacote, hash) -> objeto (FEngFindObject)
-//   0x50CA00  cdecl(objeto) FEngSetInvisible: liga o bit 0 de +0x1C, e num
-//             grupo (tipo 5, +0x18) esconde os filhos tambem
+//   0x52CEF0  cdecl(package name) -> loaded package, or 0
+//   0x5379C0  cdecl(package name, hash) -> object (FEngFindObject)
+//   0x50CA00  cdecl(object) FEngSetInvisible: sets bit 0 of +0x1C, and in a
+//             group (type 5, +0x18) hides the children too
 //
-// Os ponteiros valem enquanto o pacote vive: sao resolvidos de novo quando o
-// endereco do pacote muda, e esquecidos quando ele some.
+// The pointers hold while the package lives: they are resolved again when the
+// package's address changes, and forgotten when it goes away.
 const FE_FIND_PACKAGE = 0x52CEF0;
 const FE_FIND_OBJECT  = 0x5379C0;
 const FE_SET_INVISIBLE = 0x50CA00;
@@ -122,16 +122,16 @@ const HUD_PACKAGES = ['HUD_SingleRace.fng', 'HUD_Short_Track.fng', 'HUD_Drag.fng
 const MINIMAP_NAMES = ['Track2000_map', 'TrackMapTargetRing', 'Minimap_Mask', 'StartLineIndicator',
   'PlayerCarIndicator_1', 'PlayerCarIndicator_2', 'Minimap_North_indicator', 'GPS_Search_Group'];
 const MINIMAP_HASHES = [0xD80C97E1, 0x7AF1CA61, 0x7AF1CA62, 0x7AF1CA63, 0x697D2BCA,
-  0xE2848973, 0x4F649313, 0x4F649314];   // e os seletores do GPS (Minimap_GPS_Selector)
+  0xE2848973, 0x4F649313, 0x4F649314];   // and the GPS selectors (Minimap_GPS_Selector)
 const INDICATOR_PREFIXES = ['CIRCUITEVENTINDICATOR_', 'DRAGEVENTINDICATOR_', 'STREETEVENTINDICATOR_',
   'DRIFTEVENTINDICATOR_', 'SPRINTEVENTINDICATOR_', 'URLEVENTINDICATOR_', 'SUVEVENTINDICATOR_',
   'PAINTSHOPINDICATOR_', 'PARTSSHOPINDICATOR_', 'PERFORMANCESHOPINDICATOR_', 'CARLOTINDICATOR_',
   'ICESHOPINDICATOR_', 'CRIBINDICATOR_', 'SHOWCASEINDICATOR_', 'AIRACERINDICATOR_'];
-// no pacote vao de _0 a _5 (URL ate _8); o _0 de cada um e o que o jogo prende
-// na borda, apontando o mais proximo daquele tipo que esta fora do alcance
+// in the package they go from _0 to _5 (URL up to _8); each one's _0 is the one
+// the game pins to the edge, pointing at the nearest of that kind out of range
 const INDICATOR_MAX = 12;
 
-// FEHashUpper (0x505450): h = h * 33 + maiuscula(c), comecando em 0xFFFFFFFF
+// FEHashUpper (0x505450): h = h * 33 + upper(c), starting at 0xFFFFFFFF
 function feHash(str) {
   let h = 0xFFFFFFFF;
   for (let i = 0; i < str.length; i++) {
@@ -145,19 +145,19 @@ const MINIMAP_OBJECTS = MINIMAP_NAMES.map(feHash).concat(MINIMAP_HASHES);
 for (const p of INDICATOR_PREFIXES)
   for (let n = 0; n <= INDICATOR_MAX; n++) MINIMAP_OBJECTS.push(feHash(p + n));
 
-let hudPackages = {};   // { nome: { pkg, objs: [objeto...] } }
+let hudPackages = {};   // { name: { pkg, objs: [object...] } }
 
-// A rota do GPS. O GPS (0x81CBC0) e um A* incremental (0x4268A0); quando
-// acaba, entrega a rota a quem pediu por [[carro+0x2C]]+0x4C (0x41EA30), que
-// a copia para o controlador (NOTES.md, "The GPS route"):
+// The GPS route. The GPS (0x81CBC0) is an incremental A* (0x4268A0); when it
+// finishes, it hands the route to whoever asked through [[car+0x2C]]+0x4C
+// (0x41EA30), which copies it to the controller (NOTES.md, "The GPS route"):
 //
-//   ctrl+0x3E4  o resultado da busca
-//   ctrl+0x3F0  a rota, 0xC0 bytes: +0x38 ate 64 u16, +0xB9 quantos
-//               (u16 & 0x1FFF = indice de um no de 0x34122; 0x2000 um sentido)
-//   0x81CBC0+0x30  o destino pedido, x y z
+//   ctrl+0x3E4  the search's result
+//   ctrl+0x3F0  the route, 0xC0 bytes: +0x38 up to 64 u16, +0xB9 how many
+//               (u16 & 0x1FFF = index of a node of 0x34122; 0x2000 a direction)
+//   0x81CBC0+0x30  the requested destination, x y z
 //
-// Um no e a passagem de uma rua para outra (graph.json); a pagina monta o
-// traco rua a rua.
+// A node is the passage from one street to another (graph.json); the page
+// builds the line street by street.
 const CAR_CONTROLLER = 0x2C;
 const ROUTE_NODES    = 0x428;   // 0x3F0 + 0x38
 const ROUTE_COUNT    = 0x4A9;   // 0x3F0 + 0xB9
@@ -166,7 +166,7 @@ const ROUTE_MAX      = 64;
 const GPS            = 0x81CBC0;
 const GPS_TARGET     = 0x30;
 const ROUTE_MS       = 250;
-const NODE_TABLE     = 0x883DB0;   // ponteiro para os nos (0x34122 carregado)
+const NODE_TABLE     = 0x883DB0;   // pointer to the nodes (0x34122 loaded)
 const NODE_COUNT     = 0x883DB4;
 let routeLast = 0;
 let routeSent = '';
@@ -180,10 +180,11 @@ function gpsRoute() {
   if (speed.mem.readU32(ctrl + ROUTE_CODE) === 0) return null;
   const n = speed.mem.readI8(ctrl + ROUTE_COUNT);
   if (!n || n <= 0 || n > ROUTE_MAX) return null;
-  // Os nos sao lidos da tabela que o jogo tem na memoria ([0x883DB0], 32 bytes
-  // cada), nao do arquivo: ela tem outra contagem (3273 contra 3289 em L4RA) e
-  // outra numeracao, e o indice da rota so vale nela. De cada no saem as duas
-  // ruas e os dois pontos: +8 rua, +4 ponto; +0xA rua, +6 ponto.
+  // The nodes are read from the table the game holds in memory ([0x883DB0], 32
+  // bytes each), not from the file: it has another count (3273 against 3289 in
+  // L4RA) and another numbering, and the route's index only holds in it. Each
+  // node gives the two streets and the two points: +8 street, +4 point; +0xA
+  // street, +6 point.
   const base = speed.mem.readPtr(NODE_TABLE), total = speed.mem.readU32(NODE_COUNT);
   if (!base || !total) return null;
   const nodes = [], raw = [];
@@ -201,7 +202,7 @@ function gpsRoute() {
   return { nodes, raw, target: target ? { x: target.x, y: target.y } : null };
 }
 
-function confereRota(now) {
+function checkRoute(now) {
   if (now - routeLast < ROUTE_MS) return;
   routeLast = now;
   const r = gpsRoute();
@@ -211,11 +212,11 @@ function confereRota(now) {
   speed.ui.send('route', r);
 }
 
-// Esconder um grupo so esconde os filhos na hora; a animacao do FEng volta a
-// mostrar alguns (o circulo azul que pulsa no alvo do GPS e um deles). Por
-// isso os filhos entram na lista e sao conferidos um a um, a cada frame.
-// Grupo: tipo 5 em +0x18, filhos contados em +0x60, o primeiro em +0x64, e
-// cada filho aponta o proximo em +4 (o laco de 0x50CA25).
+// Hiding a group only hides its children at that moment; the FEng animation
+// shows some of them again (the blue circle pulsing on the GPS target is one).
+// So the children go on the list and are checked one by one, every frame.
+// Group: type 5 at +0x18, children counted at +0x60, the first at +0x64, and
+// each child points to the next at +4 (the loop at 0x50CA25).
 const FE_OBJ_TYPE = 0x18, FE_GROUP = 5, FE_CHILD_COUNT = 0x60, FE_FIRST_CHILD = 0x64, FE_NEXT = 0x04;
 function addWithChildren(objs, o, depth) {
   if (objs.indexOf(o) < 0) objs.push(o);
@@ -225,26 +226,26 @@ function addWithChildren(objs, o, depth) {
   for (; c && n > 0 && n < 256; n--, c = speed.mem.readPtr(c + FE_NEXT)) addWithChildren(objs, c, depth + 1);
 }
 
-// A animacao do alvo do GPS (o circulo azul que pulsa) torna o seletor visivel
-// de novo a cada frame, depois deste hook e antes do desenho, e esconder de
-// volta nao ganha dessa corrida. Entao o FEngSetVisible (0x50CA50) ganha um
-// desvio que ignora os objetos do minimapa original: uma tabela [quantos,
-// objeto...] que este mod mantem. Esconder (0x50CA00) segue normal.
+// The GPS target's animation (the pulsing blue circle) makes the selector
+// visible again every frame, after this hook and before drawing, and hiding it
+// back does not win that race. So FEngSetVisible (0x50CA50) gets a detour
+// that ignores the original minimap's objects: a table [count, object...]
+// this mod keeps. Hiding (0x50CA00) goes on as usual.
 //
-//   0x50CA50  8B 44 24 04  mov eax,[esp+4]     <- vira jmp stub
+//   0x50CA50  8B 44 24 04  mov eax,[esp+4]     <- becomes jmp stub
 //   0x50CA54  85 C0        test eax,eax
-//   0x50CA56  74 49        je ...              <- o stub volta aqui
+//   0x50CA56  74 49        je ...              <- the stub returns here
 //
-// So instala se os bytes forem esses (ninguem mais mexeu na funcao).
+// Installs only if the bytes are these (nobody else touched the function).
 const FE_SET_VISIBLE = 0x50CA50;
 const FE_SET_VISIBLE_BYTES = [0x8B, 0x44, 0x24, 0x04, 0x85, 0xC0, 0x74, 0x49];
 const BLOCK_MAX = 1024;
-let blockTable = 0;       // [u32 quantos][u32 objeto x BLOCK_MAX]
+let blockTable = 0;       // [u32 count][u32 object x BLOCK_MAX]
 let blockTried = false;
 
 function le32(v) { return [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF]; }
 
-function instalaBloqueio() {
+function installBlock() {
   blockTried = true;
   const b = speed.mem.readBytes(FE_SET_VISIBLE, 8);
   const got = b ? Array.from(new Uint8Array(b)) : [];
@@ -256,7 +257,7 @@ function instalaBloqueio() {
   const stub = speed.mem.alloc(64);
   if (!table || !stub) return;
   speed.mem.writeU32(table, 0);
-  const back = FE_SET_VISIBLE + 6;                       // o je
+  const back = FE_SET_VISIBLE + 6;                       // the je
   const code = [].concat(
     [0x8B, 0x44, 0x24, 0x04],                            //  0 mov eax,[esp+4]
     [0x51],                                              //  4 push ecx
@@ -278,22 +279,22 @@ function instalaBloqueio() {
   blockTable = table;
 }
 
-function atualizaBloqueio() {
+function updateBlock() {
   if (!blockTable) return;
   const all = [];
   for (const name of Object.keys(hudPackages)) for (const o of hudPackages[name].objs) all.push(o);
   const n = Math.min(all.length, BLOCK_MAX);
-  speed.mem.writeU32(blockTable, 0);                     // vazia enquanto reescreve
+  speed.mem.writeU32(blockTable, 0);                     // empty while rewriting
   for (let i = 0; i < n; i++) speed.mem.writeU32(blockTable + 4 + 4 * i, all[i]);
   speed.mem.writeU32(blockTable, n);
 }
 
-function escondeMinimapaOriginal() {
-  if (!blockTried) instalaBloqueio();
+function hideOriginalMinimap() {
+  if (!blockTried) installBlock();
   for (const name of HUD_PACKAGES) {
     const pkg = speed.call(FE_FIND_PACKAGE, [name], { ret: 'int' }) >>> 0;
     let h = hudPackages[name];
-    if (!pkg) { if (h) { delete hudPackages[name]; atualizaBloqueio(); } continue; }
+    if (!pkg) { if (h) { delete hudPackages[name]; updateBlock(); } continue; }
     if (!h || h.pkg !== pkg) {
       const objs = [];
       for (const hash of MINIMAP_OBJECTS) {
@@ -301,7 +302,7 @@ function escondeMinimapaOriginal() {
         if (o) addWithChildren(objs, o, 0);
       }
       h = hudPackages[name] = { pkg, objs };
-      atualizaBloqueio();
+      updateBlock();
     }
     for (const o of h.objs) {
       const f = speed.mem.readU32(o + FE_OBJ_FLAGS);
@@ -310,11 +311,11 @@ function escondeMinimapaOriginal() {
   }
 }
 
-const RATE_MS = 1000 / 60;   // a pagina interpola; 60 Hz deixa o giro liso
+const RATE_MS = 1000 / 60;   // the page interpolates; 60 Hz keeps the turning smooth
 
 let last = 0;
-let visivel = false;
-let paginaPronta = false;
+let visible = false;
+let pageReady = false;
 
 function vec3(addr) {
   const x = speed.mem.readF32(addr);
@@ -323,8 +324,9 @@ function vec3(addr) {
   return (x === null || y === null || z === null) ? null : { x, y, z };
 }
 
-// Posicao e rumo do jogador, ou null fora do jogo. O rumo e o angulo da
-// frente do carro no plano, em radianos, 0 = +x (leste), pi/2 = +y (norte).
+// The player's position and heading, or null outside gameplay. The heading is
+// the angle of the car's front in the plane, in radians, 0 = +x (east), pi/2 =
+// +y (north).
 function pose() {
   if (speed.game.state() !== 6) return null;
   const phys = speed.game.physics();
@@ -350,13 +352,14 @@ function trackInfo() {
   return { id, region: speed.mem.readString(info + 0x40, 8) || '', ulx, uly, width, zoom: zoom || 1 };
 }
 
-// pixel do TRACKMAP (512) para um ponto do mundo, pela calibracao da pista
-// O rumo da camera, para o radar girar com ela (como no GTA) e nao com o carro.
-// A matriz de vista do jogo fica em 0x8734A0 (4x4 floats; a mesma que o pops
-// usa, achada pelo /camera dele). A frente da camera no plano e a terceira
-// coluna, m[2] e m[6], com sinal positivo: medido no jogo comparando os quatro
-// candidatos (coluna ou linha, cada um com os dois sinais) com o rumo do carro
-// andando com a camera atras - acerto 0.94 na coluna, os outros longe disso.
+// TRACKMAP pixel (512) for a world point, by the track's calibration
+// The camera's heading, so the radar turns with it (as in GTA) and not with the
+// car. The game's view matrix is at 0x8734A0 (4x4 floats; the same one pops
+// uses, found by its /camera). The camera's front in the plane is the third
+// column, m[2] and m[6], with a positive sign: measured in the game comparing
+// the four candidates (column or row, each with both signs) with the car's
+// heading while driving with the camera behind - 0.94 match on the column, the
+// others far from it.
 const VIEW_MATRIX = 0x8734A0;
 
 function camYaw() {
@@ -366,12 +369,12 @@ function camYaw() {
   return Math.atan2(y, x);
 }
 
-// A seta azul do GPS no HUD (o marcador que flutua a frente do carro, textura
-// MARKER_GPS_AID). Quem a desenha e 0x5F3CB0 (thiscall, 1 argumento, ret 4;
-// o unico chamador, 0x63176A, nao usa o retorno): confere a rota do
-// controlador, acha um ponto a frente e desenha com 0x5EAC90. Esconder e fazer
-// a funcao voltar na primeira instrucao; mostrar, devolver os bytes dela.
-// So mexe se o comeco for o esperado (ninguem mais alterou).
+// The blue GPS arrow on the HUD (the marker floating ahead of the car, texture
+// MARKER_GPS_AID). It is drawn by 0x5F3CB0 (thiscall, 1 argument, ret 4; the
+// only caller, 0x63176A, does not use the return): it checks the controller's
+// route, finds a point ahead and draws with 0x5EAC90. Hiding is making the
+// function return at its first instruction; showing, putting its bytes back.
+// Only touched if the start is the expected one (nobody else changed it).
 const GPS_ARROW_DRAW = 0x5F3CB0;
 const GPS_ARROW_ORIG = [0x55, 0x8B, 0xEC];          // push ebp; mov ebp,esp
 const GPS_ARROW_OFF  = [0xC2, 0x04, 0x00];          // ret 4
@@ -380,18 +383,28 @@ const GPS_ARROW_OFF  = [0xC2, 0x04, 0x00];          // ret 4
 if (!speed.store.get('settingsMigrated', false)) {
   const old = { icons: speed.store.get('icons', null), turn: speed.store.get('turn', null),
                 zoom: speed.store.get('zoom', null), gpsArrow: speed.store.get('gpsArrow', null) };
-  if (old.icons === 'nativo' || old.icons === 'pin') speed.settings.set('icons', old.icons);
-  if (old.turn === 'camera' || old.turn === 'carro') speed.settings.set('turn', old.turn);
+  if (old.icons === 'nativo' || old.icons === 'pin') speed.settings.set('icons', old.icons === 'nativo' ? 'native' : 'pin');
+  if (old.turn === 'camera' || old.turn === 'carro') speed.settings.set('turn', old.turn === 'carro' ? 'car' : 'camera');
   if (old.zoom === 'fixo' || old.zoom === 'dinamico') speed.settings.set('dynamicZoom', old.zoom === 'dinamico');
   if (old.gpsArrow === 'mostrar' || old.gpsArrow === 'esconder') speed.settings.set('gpsArrow', old.gpsArrow === 'mostrar');
   speed.store.set('settingsMigrated', true);
 }
 
-function setaGps() { return speed.settings.get('gpsArrow', false) === true ? 'mostrar' : 'esconder'; }
-function aplicaSetaGps() {
+// 1.1 stored Portuguese option values; the menu only knows the English ones
+{
+  const legacy = { shape: { redondo: 'round', retangular: 'rectangular' }, edge: { infinita: 'fade', solida: 'solid' },
+                   icons: { nativo: 'native' }, turn: { carro: 'car' } };
+  for (const id of Object.keys(legacy)) {
+    const v = speed.settings.get(id, null);
+    if (legacy[id][v]) speed.settings.set(id, legacy[id][v]);
+  }
+}
+
+function gpsArrowMode() { return speed.settings.get('gpsArrow', false) === true ? 'show' : 'hide'; }
+function applyGpsArrow() {
   const b = speed.mem.readBytes(GPS_ARROW_DRAW, 3);
   const now = b ? Array.from(new Uint8Array(b)).join() : '';
-  const want = setaGps() === 'esconder' ? GPS_ARROW_OFF : GPS_ARROW_ORIG;
+  const want = gpsArrowMode() === 'hide' ? GPS_ARROW_OFF : GPS_ARROW_ORIG;
   if (now === want.join()) return true;
   if (now !== GPS_ARROW_ORIG.join() && now !== GPS_ARROW_OFF.join()) {
     console.log('minimap: another mod changed the GPS arrow code; the GPS arrow option will not work');
@@ -399,20 +412,20 @@ function aplicaSetaGps() {
   }
   return speed.mem.patch(GPS_ARROW_DRAW, want);
 }
-aplicaSetaGps();
+applyGpsArrow();
 
-// 'dinamico' (padrao) ou 'fixo': o zoom abre com a velocidade ou nao
-function zoomMode() { return speed.settings.get('dynamicZoom', true) === false ? 'fixo' : 'dinamico'; }
+// 'dynamic' (the default) or 'fixed': whether the zoom opens up with speed
+function zoomMode() { return speed.settings.get('dynamicZoom', true) === false ? 'fixed' : 'dynamic'; }
 
-// 'camera' (padrao) ou 'carro': com o que o radar gira
-function giro() { return speed.settings.get('turn', 'camera') === 'carro' ? 'carro' : 'camera'; }
+// 'camera' (the default) or 'car': what the radar turns with
+function turnMode() { const v = speed.settings.get('turn', 'camera'); return v === 'car' || v === 'carro' ? 'car' : 'camera'; }
 
-function mapa(t, x, y) {
+function toMapPixel(t, x, y) {
   return { px: (x - t.ulx) / t.width * 512, py: (t.uly - y) / t.width * 512 };
 }
 
-// Decide o offset da posicao pelo carro do jogador: o campo que estiver a
-// menos de 2 unidades da pose da fisica, em x e y.
+// Decides the position offset from the player's car: the field within 2 units
+// of the physics pose, in x and y.
 function decideCarPos(p) {
   const me = speed.game.car();
   if (!me) return;
@@ -425,15 +438,15 @@ function decideCarPos(p) {
   }
 }
 
-// Os corredores no mundo, menos o jogador: [{ x, y, h }], h em radianos como
-// o do jogador (0 = +x). O rumo sai do deslocamento desde o ultimo frame, e
-// fica o anterior enquanto o carro esta parado.
-function adversarios() {
+// The racers in the world, minus the player: [{ x, y, h }], h in radians like
+// the player's (0 = +x). The heading comes from the displacement since the last
+// frame, and the previous one stays while the car is standing still.
+function rivals() {
   if (carPos === null) return [];
   const list = speed.mem.readPtr(WORLD_CAR_LIST);
   if (!list) return [];
   const me = speed.game.car();
-  const out = [], vistos = {};
+  const out = [], seen = {};
   let car = speed.mem.readPtr(list);
   for (let i = 0; car && car !== list && i < MAX_CARS; i++, car = speed.mem.readPtr(car)) {
     if (car === me) continue;
@@ -445,37 +458,37 @@ function adversarios() {
     if (!gate || !body) continue;
     const v = vec3(car + carPos);
     if (!v || !isFinite(v.x) || !isFinite(v.y)) continue;
-    const r = rastro[car];
+    const r = trail[car];
     let h = r ? r.h : 0;
     if (r) {
       const dx = v.x - r.x, dy = v.y - r.y;
       if (dx * dx + dy * dy > 0.25) h = Math.atan2(dy, dx);
-      else { out.push({ x: v.x, y: v.y, h }); vistos[car] = r; continue; }
+      else { out.push({ x: v.x, y: v.y, h }); seen[car] = r; continue; }
     }
-    vistos[car] = { x: v.x, y: v.y, h };
+    seen[car] = { x: v.x, y: v.y, h };
     out.push({ x: v.x, y: v.y, h });
   }
-  rastro = vistos;
+  trail = seen;
   return out;
 }
 
 const hex = (v) => '0x' + ('00000000' + (v >>> 0).toString(16).toUpperCase()).slice(-8);
 
-// O que o mapa do pause mostra agora, entrada por entrada, com as regras do
-// proprio jogo: 0x533110 decide se a entrada aparece; 0x500DE0 da o tipo dela,
-// 0x4965F0 a categoria e 0x4964D0 se o filtro da legenda esconde a categoria
-// (1 = escondida). Assim a carreira, os filtros e os eventos especiais saem do
-// jogo, sem tabela nossa.
-//   corrida: +0x34 1 = especial (o X no mapa: 0x4B06D0 troca o icone pela
-//            textura MINIMAP_ICON_CROSS quando e 1; 2 e URL), +0x18 low16 a
-//            pista, +0x28 o hash do gatilho
-//   loja:    +0x3C o hash da zona
-// { races: [{ trigger, track, special }], zones: [hash] }, ou null quando a
-// tabela nao esta montada (fora da carreira, carregando).
-const EVENT_KIND    = 0x500DE0;   // thiscall(entrada) -> tipo
-const KIND_CATEGORY = 0x4965F0;   // cdecl(tipo) -> categoria
-const CATEGORY_OFF  = 0x4964D0;   // cdecl(categoria) -> 1 se o filtro esconde
-const RACE_SPECIAL  = 0x34;   // == 1 (0x0D, que parecia ser, marca o SUV)
+// What the pause map shows now, entry by entry, by the game's own rules:
+// 0x533110 decides whether the entry shows; 0x500DE0 gives its kind, 0x4965F0
+// the category and 0x4964D0 whether the legend's filter hides the category
+// (1 = hidden). So the career, the filters and the special events come from the
+// game, with no table of ours.
+//   race:  +0x34 1 = special (the X on the map: 0x4B06D0 swaps the icon for
+//          the MINIMAP_ICON_CROSS texture when it is 1; 2 is URL), +0x18 low16
+//          the track, +0x28 the trigger's hash
+//   shop:  +0x3C the zone's hash
+// { races: [{ trigger, track, special }], zones: [hash] }, or null when the
+// table is not built (outside the career, loading).
+const EVENT_KIND    = 0x500DE0;   // thiscall(entry) -> kind
+const KIND_CATEGORY = 0x4965F0;   // cdecl(kind) -> category
+const CATEGORY_OFF  = 0x4964D0;   // cdecl(category) -> 1 if the filter hides it
+const RACE_SPECIAL  = 0x34;   // == 1 (0x0D, which seemed to be it, marks the SUV)
 const RACE_TRACK    = 0x18;
 function careerVisible() {
   if (speed.mem.readU32(MAP_EVENTS_READY) !== 1) return null;
@@ -498,13 +511,13 @@ function careerVisible() {
     else if (shop) zones[hex(speed.mem.readU32(shop + SHOP_ZONE))] = true;
   }
   races.sort((x, y) => (x.trigger + x.track < y.trigger + y.track ? -1 : 1));
-  // o estado de cada categoria da legenda, para a do mapa expandido
+  // the state of each legend category, for the expanded map's legend
   const off = [];
   for (let c = 0; c <= 13; c++) off.push((speed.call(CATEGORY_OFF, [c], { ret: 'int' }) & 0xFF) !== 0);
   return { races, zones: Object.keys(zones).sort(), off };
 }
 
-function confereCarreira(now) {
+function checkCareer(now) {
   if (now - careerLast < CAREER_MS) return;
   careerLast = now;
   const c = careerVisible();
@@ -514,55 +527,57 @@ function confereCarreira(now) {
   speed.ui.send('career', c);
 }
 
-// O estilo dos marcadores: 'pin' (os pinos com icone) ou 'nativo' (circulos,
-// como o minimapa do jogo: cheios nas lojas, anel grosso nos eventos).
-// The minimap's shape: 'redondo' (the default) or 'retangular' (as GTA V's).
-function formato() { return speed.settings.get('shape', 'redondo') === 'retangular' ? 'retangular' : 'redondo'; }
-// Its edge: 'infinita' (the default, the map fades out) or 'solida'.
-function borda() { return speed.settings.get('edge', 'infinita') === 'solida' ? 'solida' : 'infinita'; }
+// The marker style: 'pin' (the pins with an icon) or 'native' (circles, like
+// the game's minimap: filled for shops, a thick ring for events).
+// The minimap's shape: 'round' (the default) or 'rectangular' (as GTA V's).
+// (The Portuguese values of 1.1 are still read, and rewritten at start.)
+function shapeMode() { const v = speed.settings.get('shape', 'round'); return v === 'rectangular' || v === 'retangular' ? 'rectangular' : 'round'; }
+// Its edge: 'fade' (the default, the map fades out) or 'solid'.
+function edgeMode() { const v = speed.settings.get('edge', 'fade'); return v === 'solid' || v === 'solida' ? 'solid' : 'fade'; }
 
-function estiloIcones() {
+function iconStyle() {
   const v = speed.settings.get('icons', 'pin');
-  return v === 'nativo' ? 'nativo' : 'pin';
+  return v === 'native' || v === 'nativo' ? 'native' : 'pin';
 }
 
-// ---- o mapa expandido ----
-// O M (e o "Mapa" do pause) abre o mapa do jogo, UI_InGame_WorldMap.fng, e e
-// ele que pausa o jogo e cuida da tela. O mod deixa isso acontecer e abre o
-// seu por cima, em tela cheia, com teclado e mouse na pagina; ao fechar o seu,
-// fecha o do jogo tambem, e o jogo segue.
-//   0x52CF60  cdecl(pacote) -> al: o pacote esta aberto
-//   PAD_BACK  a mensagem de "voltar" do controle (FEHashUpper 911AB364), a
-//             que o Esc gera: a tela do mapa a trata (0x4EF642...) e sai
-//             sozinha, retomando o jogo. Fechar o pacote a forca (0x5379A0)
-//             foi a primeira tentativa: tirava o pacote e deixava a tela
-//             pela metade, os botoes do mapa na tela e o jogo travado.
-//   0x496390  cdecl(categoria, desligada): o filtro da legenda (o setter do
-//             0x4964D0), para a legenda do mapa expandido mexer no do jogo
+// ---- the expanded map ----
+// M (and the pause menu's "Map") opens the game's map, UI_InGame_WorldMap.fng,
+// and that is what pauses the game and runs the screen. The mod lets that
+// happen and opens its own on top, full screen, with keyboard and mouse on the
+// page; when its own closes, it closes the game's too, and the game goes on.
+//   0x52CF60  cdecl(package) -> al: the package is open
+//   PAD_BACK  the controller's "back" message (FEHashUpper 911AB364), the
+//             one Esc generates: the map screen handles it (0x4EF642...) and
+//             leaves on its own, resuming the game. Force-closing the package
+//             (0x5379A0) was the first attempt: it removed the package and left
+//             the screen half done, the map's buttons on screen and the game
+//             stuck.
+//   0x496390  cdecl(category, off): the legend's filter (the setter of
+//             0x4964D0), so the expanded map's legend drives the game's
 const WORLD_MAP_PKG = 'UI_InGame_WorldMap.fng';
 const FE_PACKAGE_OPEN = 0x52CF60;
 const PAD_BACK = 0x911AB364;
 const CATEGORY_SET = 0x496390;
-const CLOSE_WAIT_MS = 1500;   // quanto esperar o mapa do jogo sair antes de reabrir o nosso
+const CLOSE_WAIT_MS = 1500;   // how long to wait for the game's map to leave before reopening ours
 const BIG_MS = 100;
 let bigOpen = false, bigLast = 0, closingSince = 0;
 
-function mapaDoJogoAberto() {
+function gameMapOpen() {
   return (speed.call(FE_PACKAGE_OPEN, [WORLD_MAP_PKG], { ret: 'int' }) & 0xFF) !== 0;
 }
 
-function abreMapa() {
+function openMap() {
   bigOpen = true;
   speed.ui.capture(true);
   speed.ui.send('bigmap', true);
 }
 
-function fechaMapa(fechaODoJogo) {
+function closeMap(closeGameMap) {
   if (!bigOpen) return;
   bigOpen = false;
   speed.ui.capture(false);
   speed.ui.send('bigmap', false);
-  if (fechaODoJogo && mapaDoJogoAberto()) {
+  if (closeGameMap && gameMapOpen()) {
     speed.game.sendFrontendMessage(PAD_BACK, WORLD_MAP_PKG);
     closingSince = speed.now();
   }
@@ -571,7 +586,7 @@ function fechaMapa(fechaODoJogo) {
 // The pause menu and its option pages: the minimap stays out of them.
 const PAUSE_PKGS = ['UI_Pause.fng', 'UI_PauseOptions.fng', 'UI_PauseOptionsMain.fng'];
 let pausedSent = null;
-function conferePausa() {
+function checkPause() {
   const paused = speed.game.state() === 6 &&
     PAUSE_PKGS.some((p) => (speed.call(FE_PACKAGE_OPEN, [p], { ret: 'int' }) & 0xFF) !== 0);
   if (paused === pausedSent) return;
@@ -579,23 +594,23 @@ function conferePausa() {
   speed.ui.send('paused', paused);
 }
 
-function confereMapaGrande(now) {
+function checkBigMap(now) {
   if (now - bigLast < BIG_MS) return;
   bigLast = now;
-  conferePausa();
-  const aberto = speed.game.state() === 6 && mapaDoJogoAberto();
-  // pedido o fechamento, espera o mapa do jogo sair; se nao sair, reabre o
-  // nosso (melhor do que deixar o jogador numa tela sem controle)
+  checkPause();
+  const gameOpen = speed.game.state() === 6 && gameMapOpen();
+  // once closing is requested, wait for the game's map to leave; if it does not,
+  // reopen ours (better than leaving the player on a screen with no control)
   if (closingSince) {
-    if (!aberto) closingSince = 0;
+    if (!gameOpen) closingSince = 0;
     else if (now - closingSince < CLOSE_WAIT_MS) return;
     else closingSince = 0;
   }
-  if (aberto && !bigOpen) abreMapa();
-  else if (!aberto && bigOpen) fechaMapa(false);   // o do jogo fechou por conta propria
+  if (gameOpen && !bigOpen) openMap();
+  else if (!gameOpen && bigOpen) closeMap(false);   // the game's closed on its own
 }
 
-speed.on('ui:bigmap-close', () => fechaMapa(true));
+speed.on('ui:bigmap-close', () => closeMap(true));
 
 // A click on a pin of the expanded map sets the GPS there, as picking the item
 // on the game's map does. The map screen (0x4E0964, 0x532DFD) does it so:
@@ -653,7 +668,7 @@ const STREET_ID = 0x0A, STREET_NPOINTS = 0x34, STREET_POINTS = 0x8C, POINT_SIZE 
 const Z_STEP = 0.125;
 let streetPtr = null;   // id -> street, rebuilt when a load moves them
 
-function alturaDaRua(street, idx, x, y) {
+function streetHeight(street, idx, x, y) {
   if (typeof street !== 'number' || typeof idx !== 'number') return null;
   for (let pass = 0; pass < 2; pass++) {
     if (!streetPtr || pass) {
@@ -676,30 +691,30 @@ function alturaDaRua(street, idx, x, y) {
 }
 
 
-function movePartida(from, always) {
+function moveSearchStart(from, always) {
   if (!from || !(always || from.d > SNAP_MIN)) return false;
   if (speed.mem.readU32(GPS) !== 1 || speed.mem.readU32(GPS + GPS_SECTION) !== 0) return false;
   speed.mem.writeF32(GPS + GPS_START, from.x);
   speed.mem.writeF32(GPS + GPS_START + 4, from.y);
-  const z = alturaDaRua(from.street, from.idx, from.x, from.y);
+  const z = streetHeight(from.street, from.idx, from.x, from.y);
   if (z !== null) speed.mem.writeF32(GPS + GPS_START + 8, z);
   return true;
 }
 
 // a request the game filed from where the car is: start it on the street
-function conferePartida() {
+function checkSearchStart() {
   if (!snap || !(snap.d > SNAP_MIN) || speed.mem.readU32(GPS) !== 1) return;
   const st = vec3(GPS + GPS_START);
   if (!st) return;
   const fromCar = Math.hypot(st.x - snap.cx, st.y - snap.cy) < SNAP_MIN;
-  if (fromCar) movePartida(snap);
+  if (fromCar) moveSearchStart(snap);
 }
 
 speed.on('ui:snap', (p) => {
   if (p && typeof p.x === 'number' && typeof p.y === 'number' && typeof p.d === 'number') snap = p;
 });
 
-function marcaGps(x, y, from) {
+function setGpsToEvent(x, y, from) {
   if (speed.mem.readU32(MAP_EVENTS_READY) !== 1) return false;
   let best = 0, bd = GPS_PICK_NEAR * GPS_PICK_NEAR;
   for (let i = 0; i < MAP_EVENT_COUNT; i++) {
@@ -716,12 +731,12 @@ function marcaGps(x, y, from) {
   if ((speed.call(GPS_IS_TARGET, [GPS_MANAGER, best], { conv: 'thiscall', ret: 'int' }) & 0xFF) !== 0) return true;
   speed.call(GPS_CLEAR, [GPS_MANAGER], { conv: 'thiscall', ret: 'void' });
   speed.call(GPS_SET, [GPS_MANAGER, best], { conv: 'thiscall', ret: 'void' });
-  movePartida(from || snap);
+  moveSearchStart(from || snap);
   routeLast = 0;                                    // send the new route right away
   return true;
 }
 
-function passoGps() {
+function stepGps() {
   for (let i = 0; i < GPS_STEPS && speed.mem.readU32(GPS) !== 0; i++)
     speed.call(GPS_UPDATE, [GPS], { conv: 'thiscall', ret: 'void' });
 }
@@ -746,10 +761,10 @@ const RESULT_ROUTE = 2, RESULT_NO_WAY = 3, RESULT_NO_START = 4;
 const WAYPOINT_WAIT_MS = 8000;
 let pendingPlace = null;   // { targets, i, from, since }
 
-function tentaPonto(now) {
+function tryWaypoint(now) {
   const p = pendingPlace;
   const t = p.targets[p.i];
-  marcaPonto(t.x, t.y, p.from, p.i > 0, alturaDaRua(t.street, t.idx, t.x, t.y));
+  setWaypoint(t.x, t.y, p.from, p.i > 0, streetHeight(t.street, t.idx, t.x, t.y));
   p.since = now;
   speed.ui.send('waypoint-target', { x: t.x, y: t.y });
 }
@@ -758,7 +773,7 @@ function tentaPonto(now) {
 // anything else (still going, reset by the game's own requests off the
 // streets) waits, and gives up quietly after WAYPOINT_WAIT_MS. The page says
 // when a route to the marker has arrived ('waypoint-routed'): that ends it.
-function conferePonto(now) {
+function checkWaypoint(now) {
   const p = pendingPlace;
   if (!p || speed.mem.readU32(GPS) !== 0) return;       // still searching
   const result = speed.mem.readU32(GPS + GPS_RESULT);
@@ -767,7 +782,7 @@ function conferePonto(now) {
     if (now - p.since > WAYPOINT_WAIT_MS) pendingPlace = null;
     return;
   }
-  if (++p.i < p.targets.length) { tentaPonto(now); return; }
+  if (++p.i < p.targets.length) { tryWaypoint(now); return; }
   pendingPlace = null;
   speed.ui.send('waypoint-failed');
 }
@@ -777,7 +792,7 @@ function conferePonto(now) {
 // +0x3F0) with code 0 and no route, as 0x4131F0 does - but that one only
 // while a search is under way, and a finished route stayed (on the HUD too).
 const CTRL_SET_ROUTE = 0x4C;
-function limpaRotaDoCarro() {
+function clearCarRoute() {
   const car = speed.game.car();
   const ctrl = car ? speed.mem.readPtr(car + CAR_CONTROLLER) : 0;
   const vt = ctrl ? speed.mem.readPtr(ctrl) : 0;
@@ -785,7 +800,7 @@ function limpaRotaDoCarro() {
   if (fn) speed.call(fn, [ctrl, 0, 0], { conv: 'thiscall', ret: 'void' });
 }
 
-function marcaPonto(x, y, from, forceStart, z) {
+function setWaypoint(x, y, from, forceStart, z) {
   if (!placeEntry) {
     placeEntry = speed.mem.alloc(ENTRY_SIZE);
     placeRecord = speed.mem.alloc(PLACE_SIZE);
@@ -802,7 +817,7 @@ function marcaPonto(x, y, from, forceStart, z) {
   speed.mem.writeU32(placeRecord + ENTRY_POS + 8, Math.round(h) >>> 0);
   speed.call(GPS_CLEAR, [GPS_MANAGER], { conv: 'thiscall', ret: 'void' });
   speed.call(GPS_SET, [GPS_MANAGER, placeEntry], { conv: 'thiscall', ret: 'void' });
-  movePartida(from || snap, forceStart);
+  moveSearchStart(from || snap, forceStart);
   routeLast = 0;
   return true;
 }
@@ -814,14 +829,14 @@ speed.on('ui:waypoint', (p) => {
   const from = p.from && typeof p.from.x === 'number' ? p.from : null;
   if (!targets.length) return;
   pendingPlace = { targets, i: 0, from, since: 0 };
-  tentaPonto(speed.now());
+  tryWaypoint(speed.now());
 });
 
 // a double click on the marker takes it away, and the route with it
 speed.on('ui:waypoint-clear', () => {
   pendingPlace = null;
   speed.call(GPS_CLEAR, [GPS_MANAGER], { conv: 'thiscall', ret: 'void' });
-  limpaRotaDoCarro();
+  clearCarRoute();
   routeLast = 0;
 });
 speed.on('ui:waypoint-routed', () => { pendingPlace = null; });
@@ -829,68 +844,68 @@ speed.on('ui:waypoint-routed', () => { pendingPlace = null; });
 
 speed.on('ui:gps', (p) => {
   if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
-  marcaGps(p.x, p.y, p.from && typeof p.from.x === 'number' ? p.from : null);
+  setGpsToEvent(p.x, p.y, p.from && typeof p.from.x === 'number' ? p.from : null);
 });
 
 
-// A legenda do mapa expandido liga e desliga categorias no filtro do jogo; o
-// minimapa, o mapa do jogo e o expandido seguem o mesmo filtro.
+// The expanded map's legend turns categories on and off in the game's filter;
+// the minimap, the game's map and the expanded one follow the same filter.
 speed.on('ui:filter', (f) => {
   if (!f || typeof f.cat !== 'number' || f.cat < 0 || f.cat > 13) return;
   speed.call(CATEGORY_SET, [f.cat, f.on ? 0 : 1], { ret: 'void' });
-  careerLast = 0;                                   // atualiza na proxima volta
+  careerLast = 0;                                   // refresh on the next pass
   careerSent = '';
 });
 
 speed.on('ui:ready', () => {
-  speed.ui.send('style', estiloIcones());
-  speed.ui.send('shape', formato());
-  speed.ui.send('edge', borda());
-  paginaPronta = true;
-  visivel = false;           // a pagina recarregou: manda o estado de novo
-  pista = null;
+  speed.ui.send('style', iconStyle());
+  speed.ui.send('shape', shapeMode());
+  speed.ui.send('edge', edgeMode());
+  pageReady = true;
+  visible = false;           // the page reloaded: send the state again
+  track = null;
   careerSent = '';
   routeSent = '';
   pausedSent = null;
 });
 
-// A pista so muda num carregamento; conferir a cada frame seria desperdicio,
-// mas a primeira pose de uma corrida nao pode sair antes dela.
-function conferePista() {
+// The track only changes on a load; checking it every frame would be waste,
+// but a race's first pose must not go out before it.
+function checkTrack() {
   const t = trackInfo();
   if (!t) return false;
-  if (!pista || pista.id !== t.id || pista.ulx !== t.ulx || pista.width !== t.width) {
-    pista = t;
+  if (!track || track.id !== t.id || track.ulx !== t.ulx || track.width !== t.width) {
+    track = t;
     speed.ui.send('track', t);
   }
   return true;
 }
-speed.on('gamestate', () => { pista = null; rastro = {}; streetPtr = null; });
+speed.on('gamestate', () => { track = null; trail = {}; streetPtr = null; });
 
 speed.on('frame', () => {
-  if (speed.game.state() === 6) escondeMinimapaOriginal();
-  if (paginaPronta) confereMapaGrande(speed.now());
-  else if (Object.keys(hudPackages).length) { hudPackages = {}; atualizaBloqueio(); }
-  conferePartida();
-  if (bigOpen) passoGps();
-  if (pendingPlace) conferePonto(speed.now());
-  if (!paginaPronta) return;
+  if (speed.game.state() === 6) hideOriginalMinimap();
+  if (pageReady) checkBigMap(speed.now());
+  else if (Object.keys(hudPackages).length) { hudPackages = {}; updateBlock(); }
+  checkSearchStart();
+  if (bigOpen) stepGps();
+  if (pendingPlace) checkWaypoint(speed.now());
+  if (!pageReady) return;
   const now = speed.now();
   if (now - last < RATE_MS) return;
   last = now;
 
   const p = pose();
-  if (!p || (!pista && !conferePista())) {
-    if (visivel) { speed.ui.send('hide'); visivel = false; }
+  if (!p || (!track && !checkTrack())) {
+    if (visible) { speed.ui.send('hide'); visible = false; }
     return;
   }
-  visivel = true;
+  visible = true;
   if (carPos === null) decideCarPos(p);
-  if (pista && pista.id === 4000) { confereCarreira(now); confereRota(now); }
-  p.rivals = adversarios();
-  const cy = giro() === 'camera' ? camYaw() : null;
+  if (track && track.id === 4000) { checkCareer(now); checkRoute(now); }
+  p.rivals = rivals();
+  const cy = turnMode() === 'camera' ? camYaw() : null;
   if (cy !== null) p.cam = cy;
-  if (zoomMode() === 'dinamico') {
+  if (zoomMode() === 'dynamic') {
     const t = speed.game.telemetry();
     if (t && isFinite(t.kmh)) p.kmh = t.kmh;
   }
@@ -900,8 +915,8 @@ speed.on('frame', () => {
 // The player changed something in Options > Mods: the arrow applies at once,
 // the style goes to the page; turn and zoom are read on every pose.
 speed.on('settings', () => {
-  aplicaSetaGps();
-  if (paginaPronta) { speed.ui.send('style', estiloIcones()); speed.ui.send('shape', formato()); speed.ui.send('edge', borda()); }
+  applyGpsArrow();
+  if (pageReady) { speed.ui.send('style', iconStyle()); speed.ui.send('shape', shapeMode()); speed.ui.send('edge', edgeMode()); }
 });
 
 speed.command('minimap', () => {
@@ -909,14 +924,14 @@ speed.command('minimap', () => {
   const t = trackInfo();
   if (!p || !t) return 'minimap: {gray}no car (not in a race or free roam){/}';
   if (carPos === null) decideCarPos(p);
-  const m = mapa(t, p.x, p.y);
+  const m = toMapPixel(t, p.x, p.y);
   const tl = speed.game.telemetry();
-  return 'minimap: ' + (tl ? '{white}' + tl.kmh.toFixed(0) + '{/} km/h (zoom ' + (zoomMode() === 'fixo' ? 'fixed' : 'dynamic') + ')  ' : '{gray}no speed{/}  ') +
+  return 'minimap: ' + (tl ? '{white}' + tl.kmh.toFixed(0) + '{/} km/h (zoom ' + zoomMode() + ')  ' : '{gray}no speed{/}  ') +
          'x {white}' + p.x.toFixed(1) + '{/} y {white}' + p.y.toFixed(1) +
          '{/} z ' + p.z.toFixed(1) + '  heading {white}' + (p.h * 180 / Math.PI).toFixed(0) +
          '{/} deg  ->  track {white}' + t.id + '{/} ' + t.region + ', map {green}' +
          m.px.toFixed(0) + ', ' + m.py.toFixed(0) + '{/}  rivals {white}' +
-         adversarios().length + '{/} (position at ' +
+         rivals().length + '{/} (position at ' +
          (carPos === null ? '{red}no field matched{/}' : 'car+0x' + carPos.toString(16)) + ')' +
          (() => { const c = careerVisible(); return c ? '  career: {white}' + c.races.length +
            '{/} race starts, {white}' + c.zones.length + '{/} shops' : '  career: {gray}no table{/}'; })() +
