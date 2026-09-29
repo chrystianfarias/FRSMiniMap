@@ -1,7 +1,8 @@
-# The redrawn maps are JeansBig's ("NFSU2 Detailed Map"), 461 MB: not ours to
-# publish. tools\extract-maps.ps1 puts them here from the pack's zip.
+# The "NFSU2 Detailed Map" zip (JeansBig) goes in the mod's root as
+# downloaded, and the mod reads the maps straight out of it: not ours to
+# publish. Loose .dds maps in maps/ also work, and are not ours either.
+*.zip
 maps/*.dds
-maps/README-DetailedMap.txt
 
 # tools/minimap_dev.py output
 build/

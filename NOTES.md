@@ -362,3 +362,18 @@ result, so hiding the arrow is making the function return at once
 (`C2 04 00` over `55 8B EC`) and showing it again is putting the bytes back.
 The minimap does that on `/minimap seta esconder|mostrar`, and only if the
 function starts with one of those two sequences.
+
+### The maps straight from the pack's zip
+
+Nothing is extracted any more. The "NFSU2 Detailed Map v1" zip sits in the
+mod's root as downloaded, and SpeedLoader's `GameTextures` reads each map out
+of it when the page asks for `mod/frsminimap/maps/TRACKMAP<id>.dds`: a loose
+file there wins, and when there is none, the zips in the mod's root are
+searched for an entry with that file name - `Default` preferred, `Beta` never
+taken. The pack's entries are LZMA (zip method 14, what 7-Zip writes: two
+version bytes, a u16 props size of 5, the props, the raw stream), decoded with
+the LZMA SDK's `LzmaDec` (Igor Pavlov, public domain). Checked against Python's
+decoding of the same entries: 4000 (Default variant) and 4603 (no variants)
+come out equal to rounding, and 4000 is further from the Beta variant than
+from the Default one. With no zip, the page gets a 404 and falls back to the
+game's own TRACKMAP.

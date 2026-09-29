@@ -2,6 +2,9 @@
 
     python tools/minimap_calibrate.py --pack "<NFSU2 Detailed Map v1 Reup.zip>" [--game ...] [--maps ...]
 
+The maps are read out of the pack's zip, like the mod reads them; --maps is only
+where calibration.json is written.
+
 The minimap frames each map with the calibration in the track's TrackInfo
 (GLOBALB.BUN chunk 0x34201: +0xAC top-left x, +0xB0 top-left y, +0xB4 width in
 world units). "NFSU2 Detailed Map" redraws some maps with a different framing -
@@ -26,6 +29,7 @@ the game's calibration.
 """
 import argparse
 import glob
+import io
 import json
 import os
 import struct
@@ -105,6 +109,22 @@ def pack_edits(pack):
     return edits
 
 
+def pack_maps(pack):
+    """{track id: dds bytes} straight from the pack's zip, as the mod reads it:
+    the Default variant where there is one, never Beta."""
+    import zipfile
+    z = zipfile.ZipFile(pack)
+    pick = {}
+    for n in z.namelist():
+        base = n.split('/')[-1]
+        if not (base.upper().startswith('TRACKMAP') and base.lower().endswith('.dds')) or '/Beta/' in n:
+            continue
+        tid = int(base[8:12])
+        if '/Default/' in n or tid not in pick:
+            pick[tid] = n
+    return {tid: z.read(n) for tid, n in pick.items()}
+
+
 def group_score(members, c):
     return sum(score(img, pts, *c)[0] for img, pts in members) / len(members)
 
@@ -151,14 +171,14 @@ def main():
     a = ap.parse_args()
     infos = track_infos(a.game)
     edits = pack_edits(a.pack)
-    have = {int(os.path.basename(f)[8:12]): f for f in glob.glob(os.path.join(a.maps, 'TRACKMAP*.dds'))}
+    have = pack_maps(a.pack)
 
     # everything the pack does not recalibrate must fit as the game frames it
     for tid in sorted(set(have) - set(edits)):
         t = infos.get(tid)
         pts = route(a.game, t['region'], tid) if t else []
         if pts:
-            img = Image.open(have[tid]).convert('L').resize((1024, 1024), Image.BOX)
+            img = Image.open(io.BytesIO(have[tid])).convert('L').resize((1024, 1024), Image.BOX)
             print('%d  game calibration, route brightness %.0f' % (tid, score(img, pts, t['ulx'], t['uly'], t['width'])[0]))
 
     groups = {}
@@ -172,7 +192,7 @@ def main():
         for tid in tids:
             pts = route(a.game, infos[tid]['region'], tid)
             if pts:
-                members.append((Image.open(have[tid]).convert('L').resize((1024, 1024), Image.BOX), pts))
+                members.append((Image.open(io.BytesIO(have[tid])).convert('L').resize((1024, 1024), Image.BOX), pts))
         free = {FIELDS[k] for k, _ in key if k in FIELDS}
         if any(k == 'TrackMapCalibrationZoomIn' for k, _ in key):
             free.add(2)       # the pack rescales these maps: the width moves too

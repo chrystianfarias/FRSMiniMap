@@ -31,10 +31,17 @@ Copy-Item (Join-Path $root "ui") $dest -Recurse -Force
 New-Item -ItemType Directory -Force (Join-Path $dest "maps") | Out-Null
 Copy-Item (Join-Path $root "maps\*") (Join-Path $dest "maps") -Force
 
-$dds = @(Get-ChildItem (Join-Path $root "maps") -Filter *.dds -ErrorAction SilentlyContinue).Count
-if ($dds -eq 0) {
-    "[..] no redrawn maps in maps\ - the minimap will use the game's own (512 px)."
-    "     To use the redrawn ones: .\tools\extract-maps.ps1 -Zip <NFSU2 Detailed Map zip>"
+# The "NFSU2 Detailed Map" zip, as downloaded, next to mod.json: the mod reads
+# the maps straight out of it (SpeedLoader's GameTextures looks inside the zips
+# in a mod's root). Copied only when it changed - it is 44 MB.
+$zips = @(Get-ChildItem $root -Filter *.zip -File)
+foreach ($z in $zips) {
+    $there = Join-Path $dest $z.Name
+    if (-not (Test-Path $there) -or (Get-Item $there).Length -ne $z.Length) { Copy-Item $z.FullName $dest -Force }
+}
+if ($zips.Count -eq 0) {
+    "[..] no zip next to mod.json - the minimap will use the game's own maps (512 px)."
+    "     For the redrawn ones, put the `"NFSU2 Detailed Map v1`" zip in the mod's root."
 }
 
 # the mod's first home was mods\minimap, installed by SpeedLoader; two copies
@@ -45,4 +52,4 @@ if ((Test-Path (Join-Path $old "main.js")) -and
     Remove-Item $old -Recurse -Force
     "[ok] removed the old copy in mods\minimap"
 }
-"[ok] FRSMiniMap installed in $dest ($dds redrawn maps)"
+"[ok] FRSMiniMap installed in $dest ($($zips.Count) map pack(s))"
