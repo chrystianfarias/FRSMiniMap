@@ -3,7 +3,7 @@
 # FRSMiniMap
 
 A 3D minimap for **NFS Underground 2** (`SPEED2.EXE` v1.2 NTSC), built on
-[FRSModLoader](https://github.com/chrystianfarias/SpeedLoader). It replaces the game's radar with a tilted map
+[FRSModLoader](https://github.com/chrystianfarias/FRSModLoader). It replaces the game's radar with a tilted map
 in perspective that turns with the camera, and reads everything it shows from
 the game itself: the map, the races and shops the career has open, the
 legend's filters, the GPS route, the other racers.
@@ -36,12 +36,12 @@ legend's filters, the GPS route, the other racers.
 
 ## Requirements
 
-> **FRSModLoader v1.2 or later is required.** FRSMiniMap is a mod *for* the loader, not a
+> **FRSModLoader 0.1.2 or later is required.** FRSMiniMap is a mod *for* the loader, not a
 > standalone `.asi`: without FRSModLoader installed in the game it does
 > nothing at all. Install the loader first.
 
 - **NFS Underground 2** v1.2 NTSC (`SPEED2.EXE`).
-- **[FRSModLoader](https://github.com/chrystianfarias/SpeedLoader) v1.2 or
+- **[FRSModLoader](https://github.com/chrystianfarias/FRSModLoader) 0.1.2 or
   later**: the minimap reads the game's textures and data through the loader
   (`http://nfsu2.tex/`, `http://nfsu2.data/`), and its options live in the
   loader's Options > Mods menu. The loader's release is dropped into the
@@ -141,7 +141,7 @@ release.ps1           packs a release zip into release/ (not in git)
 
 You may use, modify and redistribute this, including your own forks and
 derivative mods, as long as you credit Chrystian Farias and link back to
-<https://github.com/chrystianfarias/SpeedLoader>, and as long as it is not for
+<https://github.com/chrystianfarias/FRSModLoader>, and as long as it is not for
 commercial purposes. For a commercial license, ask:
 <https://buymeacoffee.com/chrystianfarias>. See [LICENSE](LICENSE).
 

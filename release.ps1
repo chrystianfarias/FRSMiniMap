@@ -11,7 +11,7 @@
         .\release.ps1 -NoZip           leave the folder, skip the .zip
 
     The player unpacks it into the folder with SPEED2.EXE, over an installed
-    FRSModLoader (v1.2 or later). The "NFSU2 Detailed Map" zip is never
+    FRSModLoader (0.1.2 or later). The "NFSU2 Detailed Map" zip is never
     packed: it is JeansBig's, and the player drops it in themselves.
 #>
 param(
@@ -46,14 +46,14 @@ Copy-Item (Join-Path $root "LICENSE") (Join-Path $stage "LICENSE.txt")
 FRSMiniMap $version
 A 3D minimap and an expanded map for Need for Speed Underground 2 (v1.2 NTSC).
 
-REQUIRES FRSModLoader v1.2 or later:
-  https://github.com/chrystianfarias/SpeedLoader
+REQUIRES FRSModLoader 0.1.2 or later:
+  https://github.com/chrystianfarias/FRSModLoader
 FRSMiniMap is a mod for the loader, not a standalone .asi. Without the loader
 installed it does nothing.
 
 INSTALL
 
-  1. Install FRSModLoader (v1.2+) and start the game once: the Options menu
+  1. Install FRSModLoader (0.1.2+) and start the game once: the Options menu
      gets a "Mods" entry.
   2. Close the game. Copy the "scripts" folder of this package into the
      folder with SPEED2.EXE, merging with the "scripts" folder that is there.
