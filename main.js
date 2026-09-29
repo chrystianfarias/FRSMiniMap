@@ -390,7 +390,7 @@ if (!speed.store.get('settingsMigrated', false)) {
   speed.store.set('settingsMigrated', true);
 }
 
-// 1.1 stored Portuguese option values; the menu only knows the English ones
+// Development builds stored Portuguese option values; the menu only knows the English ones
 {
   const legacy = { shape: { redondo: 'round', retangular: 'rectangular' }, edge: { infinita: 'fade', solida: 'solid' },
                    icons: { nativo: 'native' }, turn: { carro: 'car' } };
@@ -530,7 +530,7 @@ function checkCareer(now) {
 // The marker style: 'pin' (the pins with an icon) or 'native' (circles, like
 // the game's minimap: filled for shops, a thick ring for events).
 // The minimap's shape: 'round' (the default) or 'rectangular' (as GTA V's).
-// (The Portuguese values of 1.1 are still read, and rewritten at start.)
+// (The Portuguese values of development builds are still read, and rewritten at start.)
 function shapeMode() { const v = speed.settings.get('shape', 'round'); return v === 'rectangular' || v === 'retangular' ? 'rectangular' : 'round'; }
 // Its edge: 'fade' (the default, the map fades out) or 'solid'.
 function edgeMode() { const v = speed.settings.get('edge', 'fade'); return v === 'solid' || v === 'solida' ? 'solid' : 'fade'; }

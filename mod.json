@@ -1,7 +1,7 @@
 {
   "id": "frsminimap",
   "name": "FRSMiniMap",
-  "version": "1.2.0",
+  "version": "0.1.0",
   "author": "Chrystian Farias",
   "main": "main.js",
   "ui": "ui/index.html",
