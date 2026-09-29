@@ -1,0 +1,907 @@
+<style>
+  /* FRSMiniMap - minimapa 3D. Nada do jogo e extraido: sai dos arquivos dele em
+     tempo real.
+       http://nfsu2.tex/mod/<este mod>/maps/TRACKMAP<id>.dds
+                                            o mapa da pista redesenhado em 2048
+                                            ("NFSU2 Detailed Map", JeansBig), que vai
+                                            junto do mod; se nao houver, o do jogo:
+       http://nfsu2.tex/TRACKMAP<id>        o mapa original, 512
+                                            <id> e o enquadramento vem do TrackInfo
+                                            da pista carregada (main.js, 'track')
+       icons/PLAYER.svg, icons/PIN.svg      o jogador e os marcadores (arte do mod)
+       icons/*-solid-full.svg               os icones dos pinos (Font Awesome Free)
+       http://nfsu2.data/L4RA/shops.json    as lojas
+       http://nfsu2.tex/MINIMAP_NORTH_INDICATOR
+       http://nfsu2.data/L4RA/events.json   as largadas
+
+     Camadas:
+       .view   o recorte circular, com a perspectiva
+       .plane  o chao inclinado; anda e gira por baixo do carro (place())
+       .ground o mapa. Uma camada chata, para nada ficar
+               coplanar com outra e disputar profundidade
+       .ev     os eventos, de pe sobre o chao, sempre de frente para a camera
+       .routelayer a rota do GPS, logo acima do chao
+       .rival  os adversarios, deitados no chao, girados pelo rumo de cada um
+       .edge   o mais proximo de cada categoria fora de vista, preso na borda
+       .car    fora do 3D: e isso que acaba com a seta piscando, que era ela
+               disputando profundidade com o plano, que passa exatamente por
+               ela no ponto do carro */
+  :host { all: initial; }
+
+  .mm {
+    --size: 300px;
+    position: absolute;
+    /* no lugar do minimapa do jogo, que main.js esconde */
+    left: 36px; bottom: 36px;
+    width: var(--size); height: var(--size);
+    display: none;
+  }
+  .mm.on { display: block; }
+
+  .view {
+    position: absolute; inset: 0;
+    overflow: hidden;
+    background: #1d2b2f;
+    perspective: 420px;
+    perspective-origin: 50% 40%;
+    /* Sem borda: o mapa se dissolve nas extremidades, como no Forza
+       Horizon. Opaco ate 55% do raio, some de vez na beirada. */
+    --fade: radial-gradient(closest-side, #000 55%, rgba(0, 0, 0, 0.6) 75%, transparent 100%);
+    -webkit-mask-image: var(--fade);
+    mask-image: var(--fade);
+  }
+
+  .plane {
+    position: absolute;
+    /* o ponto do carro no radar: abaixo do centro, para ver mais do que vem
+       pela frente do que do que ficou para tras */
+    left: 50%; top: 64%;
+    width: 0; height: 0;
+    transform-origin: 0 0;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  /* Q vezes o TRACKMAP em pixels de layout, reduzido pelo transform: o Chromium
+     rasteriza a camada nesse tamanho, e e isso que o deixa nitido depois de
+     inclinado. Ver Q no script. */
+  .ground {
+    position: absolute; left: 0; top: 0;
+    /* o tamanho vem do script: 512 * Q */
+  }
+  .bitmap {
+    position: absolute; inset: 0;
+    background: 0 0 / 100% 100% no-repeat;   /* a imagem vem de pickMap() */
+  }
+  /* Os marcadores: icons/PIN.svg, embutido em cada um para o <circle> poder
+     tomar a cor da categoria (as cores do mapa do pause,
+     UI_InGame_WorldMap.fng). A ponta do pino fica no ponto da largada. */
+  .ev {
+    position: absolute; left: 0; top: 0;
+    width: 37px; height: 33px;          /* 30 px de pino + a folga (viewBox 80 x 72) */
+    transform-origin: 0 0;
+  }
+  .ev svg { display: block; width: 100%; height: 100%; overflow: visible;
+            filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55)); }
+  /* A rota do GPS, em pixels do TRACKMAP (viewBox 512). Numa camada propria,
+     logo acima do chao (translateZ, posto por place()): assim esconder o
+     trecho ja percorrido nao obriga a rasterizar de novo o mapa inteiro. */
+  .routelayer { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  .route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .route path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+  .route-edge { stroke: rgba(0, 0, 0, 0.55); stroke-width: 2.6; }
+  .route-line { stroke: #00e5ff; stroke-width: 1.5; }
+  .ev .disc { fill: var(--c); }
+  /* A ponta do pino (embaixo, no centro) fica no aro e aponta o alvo; o pino
+     gira em torno dela, e o icone desgira para continuar em pe. */
+  .edge {
+    position: absolute; left: 50%; top: 50%;
+    width: 28px; height: 25px;          /* 22 px de pino + a folga (viewBox 80 x 72) */
+    margin: -25px 0 0 -14px;            /* a ponta, embaixo no centro, no ponto */
+    transform-origin: 50% 100%;
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
+    will-change: transform, opacity;
+    opacity: 0;
+    transition: opacity 0.25s linear;   /* troca de alvo sem salto */
+  }
+  /* estilo nativo: os circulos nao ficam no 3D (metade entraria no chao, e
+     apoia-los pela base os deixava acima do ponto). Ficam nesta camada 2D, cada
+     um centrado no ponto projetado, e somem na borda como o degrade. */
+  .flat { position: absolute; inset: 0; pointer-events: none; }
+  .flat .ev { left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+  /* estilo nativo: circulo no lugar do pino, centrado no ponto (sem ponta) */
+  /* nativo: o circulo (viewBox quadrado, centrado) com o centro no ponto */
+  .edge.native { width: 28px; height: 28px; margin: -14px 0 0 -14px; transform-origin: 50% 50%; }
+  /* O contorno de todos os icones e o do X: o mesmo escuro, 4 unidades para
+     fora da cor (um traco 8 mais largo por baixo, ou paint-order: stroke). */
+  .ev .ringedge, .edge .ringedge { fill: none; stroke: rgba(6, 10, 12, 0.7); stroke-width: 19; }
+  .ev .ring, .edge .ring { fill: rgba(0, 0, 0, 0.35); stroke: var(--c); stroke-width: 11; }
+  .ev .dot, .edge .dot { fill: var(--c); stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; }
+  .ev .body, .edge .body { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; stroke-linejoin: round; }
+  .car svg path, .rival svg path { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; stroke-linejoin: round; }
+  .ev .xedge, .edge .xedge { stroke: rgba(6, 10, 12, 0.7); stroke-width: 20; stroke-linecap: round; }
+  .ev .xmark, .edge .xmark { stroke: var(--c); stroke-width: 12; stroke-linecap: round; }
+  .edge .iconwrap { transform-box: fill-box; transform-origin: center; transform: rotate(var(--ir, 0deg)); }
+  .edge svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .edge .disc { fill: var(--c); }
+  .edge .icon, .edge .icon path { fill: #fff; }
+  /* Os adversarios: a mesma seta, deitada no chao e girada pelo rumo de cada
+     um. */
+  .rival {
+    position: absolute; left: 0; top: 0;
+    width: 20px; height: 20px;
+    transform-origin: 0 0;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+  }
+  .rival svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .rival svg path { fill: #f39c12; }
+  .car svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .car svg path { fill: #2ecc71; }   /* a cor do jogador */
+  /* no estilo nativo, as do jogo: PlayerCarIndicator_1 e AIRACERINDICATOR_ */
+  .mm.native .car svg path { fill: #30cf30; }
+  .mm.native .rival svg path { fill: #cf8030; }
+  .ev .icon { fill: #fff; }
+  .ev .icon path { fill: #fff; }
+
+  /* O jogador: icons/PLAYER.svg, embutido pelo script para tomar a cor. */
+  .car {
+    position: absolute;
+    left: 50%; top: 64%;
+    width: 24px; height: 24px;
+    margin: -12px 0 0 -12px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));   /* sombra suave, igual a dos pinos */
+  }
+
+  .north {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 26px; height: 13px;
+    margin: -6px 0 0 -13px;
+    background: url(http://nfsu2.tex/MINIMAP_NORTH_INDICATOR) 0 0 / 100% 100%;
+    will-change: transform;
+  }
+</style>
+
+<div class="mm" id="mm">
+  <div class="view">
+    <div class="plane" id="plane">
+      <div class="routelayer" id="routelayer">
+        <svg class="route" viewBox="0 0 512 512"><path class="route-edge"/><path class="route-line"/></svg>
+      </div>
+      <div class="ground">
+        <div class="bitmap"></div>
+      </div>
+    </div>
+  </div>
+  <div class="flat" id="flat"></div>
+  <div class="car"></div>
+  <div class="north" id="north"></div>
+</div>
+
+<script>
+  const TILT = 58;    // graus de inclinacao do plano
+  // Zoom: pixels de tela por pixel do TRACKMAP (512), antes da perspectiva,
+  // vezes o fator de radar do TrackInfo da pista (1.5 na cidade, 2 no drag, 1
+  // no drift e no Street X). Na cidade da 4.6, que foi o zoom acertado a olho;
+  // as pistas fechadas, pequenas no mapa, ficam proporcionalmente mais perto.
+  const MAP_PX = 6.0 / 1.5;
+  // Zoom dinamico (main.js manda p.kmh quando ligado): ate ZOOM_FROM km/h o
+  // zoom e o de cima; dali ate ZOOM_TO ele abre ate ZOOM_OUT dele, e nao passa
+  // disso (o afastamento maximo). Suavizado, para nao respirar nas trocas.
+  // (40 a 220 km/h era largo demais: a 100 km/h abria so 15%, e nao se via.)
+  const ZOOM_FROM = 30, ZOOM_TO = 150, ZOOM_OUT = 0.5, ZOOM_EASE = 0.05;
+  let zoomNow = 1;
+  // O giro tambem e suavizado: o rumo da camera chega por mensagem, em
+  // intervalos irregulares, e a camera do jogo tem solavancos; a cada pose ele
+  // anda TURN_EASE do caminho ate o valor novo, pelo lado curto do circulo.
+  const TURN_EASE = 0.3;
+  let turnNow = null;
+  // .ground tem 512 * Q pixels de layout: sobra resolucao para a parte de
+  // perto, ampliada pela perspectiva
+  const Q = 6;
+  const FREE_ROAM = 4000;   // o unico mapa em que as largadas aparecem
+
+  // a paleta do mod; URL e SUV ainda com as cores do UI_InGame_WorldMap.fng
+  const KIND_COLOUR = {
+    CIRCUIT: '#9b59b6', DRAG: '#2980b9', STREET: '#3498db', DRIFT: '#f1c40f',
+    SPRINT: '#2ecc71', URL: '#beb42d', SUV: '#cf8030'
+  };
+  const SHOP_COLOUR = {
+    PAINT: '#c0392b', BODY: '#16a085', PERFORMANCE: '#2980b9',
+    CARLOT: '#3498db', SPECIALTY: '#f39c12', GARAGE: '#8e44ad'
+  };
+  // No estilo nativo, as cores do proprio jogo: as de cada <PREFIXO>1 no
+  // HUD_SingleRace.fng (iguais as do mapa do pause).
+  const NATIVE_COLOUR = {
+    CIRCUIT: '#a53ce9', DRAG: '#3282c8', STREET: '#82bee6', DRIFT: '#caf48a',
+    SPRINT: '#0e9c0e', URL: '#beb42d', SUV: '#cf8030',
+    PAINT: '#72101d', BODY: '#107010', PERFORMANCE: '#2b64a4', CARLOT: '#52a3a3',
+    SPECIALTY: '#808000', GARAGE: '#5b027d'
+  };
+  const colourOf = (kind) => (iconStyle === 'nativo' ? NATIVE_COLOUR[kind] : KIND_COLOUR[kind] || SHOP_COLOUR[kind]) || '#ffffff';
+  // o icone dentro do circulo (icons/, Font Awesome Free). Mega Low e os
+  // Uniques nao tem icone ainda e ficam de fora.
+  const ICON = {
+    RACE: 'flag-checkered-solid-full.svg',
+    SPECIAL: 'xmark.svg',                 // os eventos especiais, o X do mapa (provisorio)
+    PAINT: 'spray-can-solid-full.svg', BODY: 'star-solid-full.svg',
+    PERFORMANCE: 'wrench-solid-full.svg', CARLOT: 'car-solid-full.svg',
+    SPECIALTY: 'volume-solid-full.svg', GARAGE: 'house-solid-full.svg'
+  };
+
+  const mm = root.getElementById('mm');
+  const plane = root.getElementById('plane');
+  const north = root.getElementById('north');
+  const carEl = root.querySelector('.car');
+  const flat = root.getElementById('flat');
+  const bitmap = root.querySelector('.bitmap');
+  let arrowSvg = '';
+  fetch(new URL('icons/PLAYER.svg', mod.url)).then((r) => r.ok ? r.text() : '')
+    .then((t) => { arrowSvg = t; root.querySelector('.car').innerHTML = t; }).catch(() => {});
+
+  // Um elemento por adversario, reaproveitados de frame a frame.
+  const rivals = [];
+  function placeRivals(list, s, r) {
+    while (rivals.length < list.length) {
+      const el = document.createElement('div');
+      el.className = 'rival';
+      el.innerHTML = arrowSvg;
+      plane.appendChild(el);
+      rivals.push(el);
+    }
+    for (let i = 0; i < rivals.length; i++) {
+      const el = rivals[i];
+      if (i >= list.length) { el.style.display = 'none'; continue; }
+      if (!el.firstChild && arrowSvg) el.innerHTML = arrowSvg;
+      const c = list[i];
+      const { gx, gy } = toGround(c.x, c.y);
+      // deitado no chao, um pouco acima dele (translateZ) para nao disputar
+      // profundidade com o mapa; do mesmo tamanho na tela a qualquer zoom; a
+      // ponta da seta para o rumo: h no mundo vira 90 - h graus no mapa
+      el.style.display = '';
+      el.style.transform = 'translate(' + gx + 'px,' + gy + 'px) translateZ(' + (2 / s) + 'px) ' +
+        'scale(' + (1 / s) + ') rotate(' + (90 - c.h * 180 / Math.PI) + 'deg) translate(-50%,-50%)';
+    }
+  }
+
+  // Um molde de pino por icone: icons/PIN.svg com o icone branco posto dentro
+  // do seu <circle> ou <ellipse>, cujo centro e raio sao lidos do proprio
+  // arquivo. Cada marcador ganha uma copia do seu molde; o circulo toma a cor
+  // pela variavel --c.
+  const pins = {};
+  async function loadPins() {
+    const text = async (f) => { const r = await fetch(new URL('icons/' + f, mod.url)); return r.ok ? r.text() : ''; };
+    const parse = (t) => new DOMParser().parseFromString(t, 'image/svg+xml').documentElement;
+    const pin = await text('PIN.svg');
+    for (const [key, file] of Object.entries(ICON)) {
+      const base = parse(pin);
+      const icon = parse(await text(file));
+      const disc = base.querySelector('circle, ellipse');
+      const body = base.querySelector('path');      // o corpo branco do pino
+      if (body) body.setAttribute('class', 'body');
+      if (icon.nodeName === 'svg' && disc) {
+        const num = (a) => parseFloat(disc.getAttribute(a)) || 0;
+        const cx = num('cx'), cy = num('cy');
+        const r = Math.min(num('r') || num('rx'), num('r') || num('ry'));
+        const size = r * 1.4;   // o icone ocupa boa parte do circulo
+        disc.setAttribute('class', 'disc');
+        icon.setAttribute('x', cx - size / 2);
+        icon.setAttribute('y', cy - size / 2);
+        icon.setAttribute('width', size);
+        icon.setAttribute('height', size);
+        icon.setAttribute('class', 'icon');
+        // num <g> proprio, para o marcador de borda poder desvirar o icone
+        const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        wrap.setAttribute('class', 'iconwrap');
+        wrap.appendChild(icon);
+        base.appendChild(wrap);
+      }
+      // folga dos lados e em cima para a sombra; embaixo o desenho termina na
+      // ponta (y 64), que e onde o pino se apoia
+      base.setAttribute('viewBox', '-8 -8 80 72');
+      pins[key] = base.outerHTML;
+    }
+  }
+  // Os marcadores ficam em pe no mesmo espaco 3D do chao: o que ficasse abaixo
+  // do ponto de apoio atravessaria o chao e sumiria (era o "corte" embaixo).
+  // Por isso o desenho termina no apoio, a sombra e em volta (sem descer), e
+  // eles sobem LIFT pixels do chao.
+  const LIFT = 4;
+  const pinsReady = loadPins().catch((e) => console.log('minimap: ' + e.message));
+
+  // Estilo 'nativo' (main.js, 'style'): circulos como os do minimapa do jogo -
+  // cheio numa loja, anel de borda grossa num evento, o especial com um X.
+  let iconStyle = 'pin';
+  // mesmo viewBox dos pinos (-8 -8 80 72): o desenho termina embaixo, onde se
+  // apoia. O especial e o X do jogo: so o X, na cor, com um contorno escuro.
+  const NATIVE_RACE = '<svg viewBox="-8 -8 80 80"><circle class="ringedge" cx="32" cy="32" r="23"/>' +
+    '<circle class="ring" cx="32" cy="32" r="23"/></svg>';
+  const NATIVE_SPECIAL = '<svg viewBox="-8 -8 80 80"><path class="xedge" d="M14 14L50 50M50 14L14 50"/>' +
+    '<path class="xmark" d="M14 14L50 50M50 14L14 50"/></svg>';
+  const NATIVE_SHOP = '<svg viewBox="-8 -8 80 80"><circle class="dot" cx="32" cy="32" r="22"/></svg>';
+  function markup(icon) {
+    if (iconStyle !== 'nativo') return pins[icon] || '';
+    return icon === 'RACE' ? NATIVE_RACE : icon === 'SPECIAL' ? NATIVE_SPECIAL : NATIVE_SHOP;
+  }
+  root.querySelector('.ground').style.width = root.querySelector('.ground').style.height = 512 * Q + 'px';
+  const routeLayer = root.getElementById('routelayer');
+  routeLayer.style.width = routeLayer.style.height = 512 * Q + 'px';
+
+  let track = null;     // o TrackInfo da pista carregada, de main.js
+  let frame = null;     // o enquadramento do mapa em uso: { ulx, uly, width }
+  // Enquadramentos dos mapas redesenhados que nao seguem o do jogo (o circuito
+  // URL, por exemplo, vira um recorte ampliado). Medidos por
+  // tools/minimap_calibrate.py contra a rota de cada corrida; so valem para o
+  // mapa que vai com o mod, nunca para o do jogo.
+  let calibration = {};
+  const calibrationReady = fetch(new URL('../maps/calibration.json', mod.url))
+    .then((r) => r.ok ? r.json() : {})
+    .then((c) => { calibration = c; })
+    .catch(() => {});
+  let starts = [];      // as largadas do free roam, em coordenadas do mundo
+  let shops = [];       // as lojas, idem
+  // o que a carreira mostra agora (main.js, 'career'): { triggers, zones } com
+  // os hashes; null = sem essa informacao, e ai tudo aparece
+  let career = null;
+  const events = [];    // { el, gx, gy }: posicao no .ground, em pixels de layout
+
+  // mundo -> pixel do .ground, pela calibracao do TRACKMAP da pista
+  function toGround(x, y) {
+    const k = 512 * Q / frame.width;
+    return { gx: (x - frame.ulx) * k, gy: (frame.uly - y) * k };
+  }
+
+  // A categoria que mais aparece no ponto decide a cor.
+  function kindOf(ev) {
+    const n = {};
+    for (const r of ev.races) n[r.kind] = (n[r.kind] || 0) + 1;
+    return Object.keys(n).sort((a, b) => n[b] - n[a])[0];
+  }
+
+  async function loadEvents() {
+    const [ev, sh] = await Promise.all([
+      fetch('http://nfsu2.data/L4RA/events.json').then((r) => r.ok ? r.json() : { events: [] }),
+      fetch('http://nfsu2.data/L4RA/shops.json').then((r) => r.ok ? r.json() : { shops: [] })
+    ]);
+    starts = ev.events;
+    shops = sh.shops.filter((x) => ICON[x.kind]);
+    await pinsReady;
+    placeEvents();
+  }
+
+  function addPin(x, y, colour, icon, title, cat) {
+    const el = document.createElement('div');
+    el.className = 'ev';
+    el.innerHTML = markup(icon);
+    el.style.setProperty('--c', colour);
+    el.title = title;
+    const isFlat = iconStyle === 'nativo';
+    (isFlat ? flat : plane).appendChild(el);
+    const { gx, gy } = toGround(x, y);
+    events.push({ el, gx, gy, wx: x, wy: y, colour, icon, cat, flat: isFlat });
+  }
+
+  // Com uma rota do GPS, so o destino dela fica: o pino mais perto do alvo
+  // (ate FOCUS_NEAR), no mapa e na borda, e na borda sem esmaecer pela
+  // distancia. Sem rota, tudo volta.
+  // o alvo do GPS de uma loja e um ponto na rua, a 13-115 unidades dela
+  const FOCUS_NEAR = 150;  // unidades do mundo
+  // Ao chegar (perto do alvo, ou com a rota toda percorrida) o filtro sai; so
+  // volta com uma rota nova do GPS.
+  const ARRIVE = 40;       // unidades do mundo
+  let focus = null, arrived = false;
+  const routing = () => route && !arrived;
+  function applyFocus() {
+    focus = null;
+    if (routing() && route.target) {
+      let bd = FOCUS_NEAR * FOCUS_NEAR;
+      for (const e of events) {
+        const d = (e.wx - route.target.x) ** 2 + (e.wy - route.target.y) ** 2;
+        if (d < bd) { bd = d; focus = e; }
+      }
+    }
+    for (const e of events) e.el.style.display = routing() && e !== focus ? 'none' : '';
+  }
+  function checkArrival(p) {
+    if (!route || arrived) return;
+    const t = route.target;
+    const near = t && (p.x - t.x) ** 2 + (p.y - t.y) ** 2 < ARRIVE * ARRIVE;
+    const done = routeWorld.length > 4 && routeAt >= routeWorld.length / 2 - 2;
+    if (near || done) { arrived = true; applyFocus(); }
+  }
+
+  // Na borda, como no minimapa do jogo: o mais proximo de cada categoria
+  // (tipo de corrida ou de loja) que esta fora do que se ve aparece preso na
+  // beirada do radar, na direcao dele. Fora do 3D, em .mm.
+  const edges = {};   // categoria -> elemento
+  const EDGE_RADIUS = 1.12;  // em raios do radar: a ponta fica alem do degrade
+  // opacidade pela distancia do alvo, em raios do radar: opaco logo fora de
+  // vista, EDGE_FAINT a EDGE_FAR raios dali em diante
+  const EDGE_FAR = 6, EDGE_FAINT = 0.25;
+  // o aparecimento: em raios do radar, do ponto projetado. Em EDGE_IN o alvo
+  // acabou de sair de vista e o pino de borda ainda e transparente; em
+  // EDGE_FULL ja esta opaco. Sem isso ele surgia de uma vez ("pop").
+  const EDGE_IN = 0.8, EDGE_FULL = 1.4;
+  function edgeFor(e) {
+    let el = edges[e.cat];
+    if (!el) {
+      el = edges[e.cat] = document.createElement('div');
+      el.className = 'edge';
+      mm.appendChild(el);
+    }
+    const want = iconStyle + ':' + e.icon;
+    if (el.dataset.icon !== want) {
+      el.innerHTML = markup(e.icon);
+      el.dataset.icon = want;
+      el.classList.toggle('native', iconStyle === 'nativo');
+    }
+    el.style.setProperty('--c', e.colour);
+    return el;
+  }
+  // Onde um ponto do chao cai na tela, pela mesma conta que o CSS faz: o plano
+  // gira rotateX(TILT) em torno do ponto do carro (50%, 64% da vista) e a
+  // vista projeta com perspective PERSPECTIVE a partir de 50%, 40%. (sx, sy)
+  // e o ponto no plano, em px, ja girado pelo rumo; devolve { x, y } em
+  // relacao ao centro da vista, ou null se cair atras da camera.
+  const PERSPECTIVE = 420, CAR_AT = 0.64, EYE_AT = 0.40;
+  function project(sx, sy) {
+    const W = mm.clientWidth, H = mm.clientHeight;
+    const t = TILT * Math.PI / 180;
+    const y = sy * Math.cos(t), z = sy * Math.sin(t);
+    if (z <= -PERSPECTIVE * 0.95) return null;
+    const f = PERSPECTIVE / (PERSPECTIVE - z);
+    const X = (sx) * f;                                  // horizontal: origem no centro
+    const Y = (H * CAR_AT + y - H * EYE_AT) * f + H * EYE_AT;
+    return { x: X, y: Y - H / 2, f };
+  }
+
+  function placeEdges(gx, gy, s, r) {
+    const R = mm.clientWidth / 2;
+    const cr = Math.cos(r * Math.PI / 180), sr = Math.sin(r * Math.PI / 180);
+    const best = {};
+    for (const e of events) {
+      if (routing() && e !== focus) continue;
+      const dx = (e.gx - gx) * s, dy = (e.gy - gy) * s;
+      const d = dx * dx + dy * dy;
+      if (!best[e.cat] || d < best[e.cat].d) best[e.cat] = { e, d, fx: dx * cr - dy * sr, fy: dx * sr + dy * cr };
+    }
+    for (const cat of Object.keys(edges)) if (!best[cat]) edges[cat].style.opacity = 0;
+    for (const cat of Object.keys(best)) {
+      const b = best[cat];
+      const pnt = project(b.fx, b.fy);
+      // quanto do alvo ja saiu de vista: 0 enquanto o ponto projetado esta no
+      // mapa, 1 quando ja esta bem fora; atras da camera, fora de vez
+      const out = pnt ? Math.hypot(pnt.x, pnt.y) / R : EDGE_FULL;
+      const appear = Math.min(1, Math.max(0, (out - EDGE_IN) / (EDGE_FULL - EDGE_IN)));
+      if (appear <= 0) { if (edges[cat]) edges[cat].style.opacity = 0; continue; }
+      // direcao: do ponto projetado; atras da camera, a do plano
+      const vx = pnt ? pnt.x : b.fx, vy = pnt ? pnt.y : b.fy;
+      const dist = Math.hypot(vx, vy) || 1;
+      b.sx = vx; b.sy = vy;
+      const el = edgeFor(b.e);
+      const k = R * EDGE_RADIUS / dist;
+      // a ponta aponta para fora, na direcao do alvo: o pino "de pe" aponta
+      // para baixo (90 graus), entao gira de angulo - 90
+      const turn = iconStyle === 'nativo' ? 0 : Math.atan2(b.sy, b.sx) * 180 / Math.PI - 90;
+      const far = Math.sqrt(b.d) / R;             // distancia real, sem a inclinacao
+      const t = Math.min(1, Math.max(0, (far - 1) / (EDGE_FAR - 1)));
+      el.style.opacity = routing() ? appear : appear * (1 - t * (1 - EDGE_FAINT));
+      el.style.setProperty('--ir', (-turn) + 'deg');
+      el.style.transform = 'translate(' + (b.sx * k) + 'px,' + (b.sy * k) + 'px) rotate(' + turn + 'deg)';
+    }
+  }
+
+  // Os pinos so existem no free roam: numa corrida as largadas nao dizem nada.
+  // Na carreira, so o que o mapa do pause mostraria: corridas disponiveis,
+  // lojas do estagio ja descobertas, e respeitando os filtros da legenda.
+  function placeEvents() {
+    for (const e of events) e.el.remove();
+    events.length = 0;
+    for (const cat of Object.keys(edges)) edges[cat].style.opacity = 0;
+    if (!track || !frame || track.id !== FREE_ROAM) return;
+    const zone = career ? new Set(career.zones) : null;
+    if (career) {
+      // Um pino por corrida que o mapa do pause mostra agora (ja filtrada pela
+      // legenda, pelo proprio jogo). O tipo e o da corrida disponivel - achada
+      // pela pista entre as do gatilho -, e a especial ganha o X.
+      const byHash = {};
+      for (const ev of starts) byHash[ev.hash] = ev;
+      const seen = new Set();
+      for (const c of career.races) {
+        const ev = byHash[c.trigger];
+        if (!ev) continue;
+        const r = ev.races.find((x) => x.track === c.track) || ev.races[0];
+        const k = r.kind, icon = c.special ? 'SPECIAL' : 'RACE';
+        const key = c.trigger + ':' + k + ':' + icon;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        addPin(ev.x, ev.y, colourOf(k), icon, r.name || k,
+               'race:' + (c.special ? 'SPECIAL' : k));
+      }
+    } else {
+      for (const ev of starts) {
+        const k = kindOf(ev);
+        addPin(ev.x, ev.y, colourOf(k), 'RACE',
+               ev.races.map((x) => x.name || x.kind).join(', '), 'race:' + k);
+      }
+    }
+    for (const sh of shops)
+      if (!zone || zone.has(sh.zone))
+        addPin(sh.x, sh.y, colourOf(sh.kind), sh.kind, sh.name, 'shop:' + sh.kind);
+    applyFocus();
+  }
+
+  // O mapa da pista: o redesenhado que vai com o mod, se houver um para ela,
+  // senao o do jogo. Nenhum dos dois substitui arquivo do jogo.
+  // O enquadramento acompanha o mapa: o do jogo usa o TrackInfo, o do mod o
+  // calibration.json quando a pista esta la.
+  function pickMap(id) {
+    const mine = 'http://nfsu2.tex/mod/' + mod.id + '/maps/TRACKMAP' + id + '.dds';
+    const game = 'http://nfsu2.tex/TRACKMAP' + id;
+    const use = (url, f) => {
+      if (!track || track.id !== id) return;
+      frame = f;
+      bitmap.style.backgroundImage = 'url(' + url + ')';
+      placeEvents();
+      drawRoute();
+    };
+    const img = new Image();
+    img.onload = () => calibrationReady.then(() => use(mine, calibration[id] || track));
+    img.onerror = () => use(game, track);
+    bitmap.style.backgroundImage = 'none';
+    frame = null;
+    img.src = mine;
+  }
+
+  // O rumo vem em radianos no plano do mundo: 0 = +x, pi/2 = +y (norte).
+  // No mapa o y e invertido, entao a frente do carro aponta para -h na tela,
+  // e girar o plano de h - 90 graus poe a frente para cima.
+  function place(p) {
+    const { gx, gy } = toGround(p.x, p.y);
+    // O radar gira com a camera (p.cam, quando main.js a tem) ou com o carro.
+    // Girando com a camera, a seta do jogador gira pela diferenca entre o rumo
+    // do carro e o da camera: olhando para o lado, ela aponta para onde o
+    // carro vai.
+    const want = typeof p.cam === 'number' ? p.cam : p.h;
+    if (turnNow === null) turnNow = want;
+    else {
+      let d = want - turnNow;
+      d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;   // o caminho curto
+      turnNow += d * TURN_EASE;
+    }
+    const turn = turnNow;
+    const r = turn * 180 / Math.PI - 90;
+    const carTurn = (turn - p.h) * 180 / Math.PI;
+    const carRot = Math.abs(carTurn) < 0.05 ? '' : 'rotate(' + carTurn.toFixed(2) + 'deg)';
+    if (carEl.style.transform !== carRot) carEl.style.transform = carRot;
+    // pixels de tela por pixel do .ground
+    const kmh = typeof p.kmh === 'number' ? p.kmh : 0;
+    const t = Math.min(1, Math.max(0, (kmh - ZOOM_FROM) / (ZOOM_TO - ZOOM_FROM)));
+    zoomNow += ((1 - t * (1 - ZOOM_OUT)) - zoomNow) * ZOOM_EASE;
+    const s = MAP_PX * track.zoom * zoomNow / Q;
+    plane.style.transform =
+      'rotateX(' + TILT + 'deg) scale(' + s + ') rotate(' + r + 'deg) ' +
+      'translate(' + (-gx) + 'px,' + (-gy) + 'px)';
+
+    // Cada evento desfaz o giro, a escala e a inclinacao do plano: fica de
+    // pe no seu ponto, do mesmo tamanho na tela a qualquer zoom, de frente
+    // para a camera. translate(-50%,-100%) poe a base do pino no ponto.
+    // o pino apoia a ponta no ponto; o circulo nativo, o centro
+    const stand = 'scale(' + (1 / s) + ') rotate(' + (-r) + 'deg) rotateX(' + (-TILT) + 'deg) ' +
+                  'translate(-50%,-100%)';
+    const pinLift = 'translateZ(' + (LIFT / s).toFixed(3) + 'px) ';
+    const R = mm.clientWidth / 2;
+    const cr = Math.cos(r * Math.PI / 180), sr = Math.sin(r * Math.PI / 180);
+    for (const e of events) {
+      if (!e.flat) {
+        e.el.style.transform = 'translate(' + e.gx + 'px,' + e.gy + 'px) ' + pinLift + stand;
+        continue;
+      }
+      // nativo, em 2D: o ponto projetado, o tamanho pela perspectiva, e o
+      // mesmo degrade do radar (opaco ate 55% do raio, some ate a borda)
+      const dx = (e.gx - gx) * s, dy = (e.gy - gy) * s;
+      const q = project(dx * cr - dy * sr, dx * sr + dy * cr);
+      const out = q ? Math.hypot(q.x, q.y) / R : 2;
+      if (out > 1.05) { if (e.el.style.display !== 'none') e.el.style.display = 'none'; continue; }
+      if (e.el.style.display === 'none' && !(routing() && e !== focus)) e.el.style.display = '';
+      e.el.style.opacity = Math.min(1, Math.max(0, (1 - out) / 0.45));
+      e.el.style.transform = 'translate(' + q.x.toFixed(1) + 'px,' + q.y.toFixed(1) + 'px) scale(' + q.f.toFixed(3) + ')';
+    }
+    placeRivals(p.rivals || [], s, r);
+    placeEdges(gx, gy, s, r);
+    const lift = 'translateZ(' + (1.5 / s).toFixed(3) + 'px)';
+    if (routeLayer.style.transform !== lift) routeLayer.style.transform = lift;
+    trimRoute(p);
+    checkArrival(p);
+
+    // o norte corre pelo aro: na tela ele fica a r graus de "para cima"
+    const a = (r - 90) * Math.PI / 180;
+    const rad = mm.clientWidth * 0.42;   // dentro do degrade, onde ainda se le
+    north.style.transform =
+      'translate(' + (Math.cos(a) * rad) + 'px,' + (Math.sin(a) * rad) + 'px) rotate(' + r + 'deg)';
+  }
+
+  loadEvents().catch((e) => console.log('minimap: ' + e.message));
+
+  // ---- a rota do GPS ----
+  // graph.json: no -> [rua, ponto, rua, ponto], as duas ruas que ele liga;
+  // roads.json: rua (id) -> pontos. A rota (main.js, 'route') e uma lista de
+  // nos; ver routePoints.
+  let graph = null, streets = null, route = null, lastPose = null;
+  const graphReady = Promise.all([
+    fetch('http://nfsu2.data/L4RA/graph.json').then((r) => r.json()),
+    fetch('http://nfsu2.data/L4RA/roads.json').then((r) => r.json())
+  ]).then(([g, r]) => {
+    graph = g.nodes;
+    streets = {};
+    for (const l of r.lines) streets[l.id] = l.p;
+  }).catch((e) => console.log('minimap: grafo ' + e.message));
+
+  function nearestPoint(p, x, y) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < p.length; i += 2) {
+      const d = (p[i] - x) ** 2 + (p[i + 1] - y) ** 2;
+      if (d < bd) { bd = d; best = i / 2; }
+    }
+    return best;
+  }
+
+  // A rua mais proxima de uma posicao, entre todas, como um "no" parado nela:
+  // { a, pa, b, pb } com a mesma rua e o mesmo ponto nos dois lados.
+  function onStreet(pos) {
+    let best = null, bd = Infinity;
+    for (const id in streets) {
+      const p = streets[id];
+      for (let i = 0; i < p.length; i += 2) {
+        const d = (p[i] - pos.x) ** 2 + (p[i + 1] - pos.y) ** 2;
+        if (d < bd) { bd = d; best = { street: +id, idx: i / 2 }; }
+      }
+    }
+    return best ? { a: best.street, pa: best.idx, b: best.street, pb: best.idx } : null;
+  }
+
+  // os pontos da rua de i a j, na ordem que o carro anda
+  function walk(out, p, i, j) {
+    const step = j >= i ? 1 : -1;
+    for (let k = i; ; k += step) {
+      out.push(p[2 * k], p[2 * k + 1]);
+      if (k === j) break;
+    }
+  }
+
+  // Um no liga duas ruas: { a, pa, b, pb }. Nos consecutivos da rota
+  // compartilham uma rua, e e por ela que o carro anda de um ao outro. A ordem
+  // da lista nao e suposta (o A* pode entrega-la do destino para a origem):
+  // para cada par, a rua em comum e percorrida do ponto de um ao ponto do
+  // outro, e a lista e virada se o fim dela estiver mais perto do carro.
+  const side = (n, street) => (n.a === street ? n.pa : n.b === street ? n.pb : -1);
+  function common(u, v) {
+    if (u.a === v.a || u.a === v.b) return u.a;
+    if (u.b === v.a || u.b === v.b) return u.b;
+    return null;
+  }
+  function pointOf(n) {
+    const p = streets[n.a];
+    return p ? { x: p[2 * n.pa], y: p[2 * n.pa + 1] } : null;
+  }
+  const dist2 = (p, q) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+
+  // Rua -> nos que passam por ela, para a busca entre dois nos sem rua em
+  // comum: o caminho mais curto no grafo, com o custo de cada passagem sendo
+  // a distancia ao longo da rua (Dijkstra). A menor quantidade de passagens,
+  // que era a primeira versao, inventava voltas que o GPS nao faria.
+  const OUTLIER = 600;   // unidades do mundo
+  let byStreet = null;
+  function along(street, i, j) {
+    const p = streets[street];
+    if (!p || i < 0 || j < 0) return Infinity;
+    let a = Math.min(i, j), b = Math.max(i, j), L = 0;
+    for (let k = a; k < b; k++) L += Math.hypot(p[2 * k + 2] - p[2 * k], p[2 * k + 3] - p[2 * k + 1]);
+    return L;
+  }
+  function bridge(u, v) {
+    if (!byStreet) {
+      byStreet = {};
+      graph.forEach(([a, , b], i) => {
+        (byStreet[a] = byStreet[a] || []).push(i);
+        (byStreet[b] = byStreet[b] || []).push(i);
+      });
+    }
+    const node = (i) => { const [a, pa, b, pb] = graph[i]; return { a, pa, b, pb }; };
+    // fila de prioridade minima, em vetor (poucos milhares de nos)
+    const heap = [];
+    const push = (c, k) => { heap.push([c, k]); let i = heap.length - 1;
+      while (i > 0) { const q = (i - 1) >> 1; if (heap[q][0] <= heap[i][0]) break; [heap[q], heap[i]] = [heap[i], heap[q]]; i = q; } };
+    const pop = () => { const top = heap[0], last = heap.pop();
+      if (heap.length) { heap[0] = last; let i = 0;
+        for (;;) { const l = 2 * i + 1, r = l + 1; let m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } }
+      return top; };
+    const nodes = new Map([['u', u], ['v', v]]);
+    const cost = new Map([['u', 0]]), prev = new Map();
+    push(0, 'u');
+    const limit = 4 * Math.sqrt(dist2(pointOf(u), pointOf(v))) + 400;
+    while (heap.length) {
+      const [c, k] = pop();
+      if (c > cost.get(k)) continue;
+      if (k === 'v') {
+        const chain = [];
+        for (let x = 'v'; x !== undefined; x = prev.get(x)) chain.unshift(nodes.get(x));
+        return chain;
+      }
+      if (c > limit) break;
+      const f = nodes.get(k);
+      for (const st of [f.a, f.b]) {
+        const from = side(f, st);
+        const relax = (key, n) => {
+          const cc = c + along(st, from, side(n, st));
+          if (cc < (cost.has(key) ? cost.get(key) : Infinity)) {
+            cost.set(key, cc); prev.set(key, k); nodes.set(key, n); push(cc, key);
+          }
+        };
+        if (st === v.a || st === v.b) relax('v', v);
+        for (const i of byStreet[st] || []) {
+          const key = 'n' + i;
+          if (key === k) continue;
+          relax(key, nodes.get(key) || node(i));
+        }
+      }
+    }
+    return null;
+  }
+
+  function routePoints(r, from) {
+    const out = [];
+    // os nos vem prontos de main.js, lidos da memoria do jogo; so valem os que
+    // caem em ruas conhecidas
+    let nodes = r.nodes.filter((n) => streets[n.a] && streets[n.b]);
+    // Entradas que caem longe dos dois vizinhos nao sao passagens do trajeto
+    // (numa rota real, 1689 e 1660 estavam a milhares de unidades do resto):
+    // ficam de fora, e o buraco que deixam e preenchido pelo grafo.
+    nodes = nodes.filter((n, i, all) => {
+      const p = pointOf(n);
+      if (!p) return false;
+      const near = (m) => { const q = m && pointOf(m); return q && dist2(p, q) < OUTLIER * OUTLIER; };
+      return all.length < 3 || near(all[i - 1]) || near(all[i + 1]);
+    });
+    if (!nodes.length) return out;
+    if (from && nodes.length > 1) {
+      const f = pointOf(nodes[0]), l = pointOf(nodes[nodes.length - 1]);
+      if (f && l && dist2(l, from) < dist2(f, from)) nodes = nodes.reverse();
+    }
+
+    // As pontas nao dependem da lista: o carro e o destino viram "nos" na
+    // rua mais proxima de cada um (entre todas), e o caminho mais curto os
+    // liga ao primeiro e ao ultimo no. Antes o inicio era adivinhado pelas
+    // ruas do primeiro no, e quando o carro nao estava numa delas o traco
+    // comecava na rua do lado.
+    const startNode = from ? onStreet(from) : null;
+    const endNode = r.target ? onStreet(r.target) : null;
+    const seq = [];
+    if (startNode) seq.push(startNode);
+    for (const n of nodes) seq.push(n);
+    if (endNode) seq.push(endNode);
+
+    // de no em no, pela rua que os dois compartilham; quando nao ha uma, a
+    // rota pulou passagens, e o caminho entre eles vem do proprio grafo
+    for (let i = 0; i + 1 < seq.length; i++) {
+      const u = seq[i], v = seq[i + 1];
+      const chain = common(u, v) !== null ? [u, v] : bridge(u, v) || [u, v];
+      for (let k = 0; k + 1 < chain.length; k++) {
+        const x = chain[k], y = chain[k + 1];
+        const st = common(x, y);
+        const p = st !== null ? streets[st] : null;
+        if (p) walk(out, p, side(x, st), side(y, st));
+        else { const q = pointOf(y); if (q) out.push(q.x, q.y); }
+      }
+    }
+    return out;
+  }
+
+  // Alguns nos da rota ficam fora do caminho de verdade (uma rua lateral, a
+  // outra pista da avenida): o traco ia ate eles e voltava - um ramo sem
+  // saida, ou uma linha dupla. Um caminho de GPS nao passa duas vezes pelo
+  // mesmo lugar, entao sempre que o traco volta a menos de LOOP_GAP de um
+  // ponto onde ja esteve, o desvio entre os dois e cortado.
+  const LOOP_GAP = 20;       // unidades do mundo
+  const LOOP_MIN = 3;        // pontos: vizinhos imediatos nao contam como volta
+  function dropExcursions(pts) {
+    const out = [];
+    for (let i = 0; i < pts.length; i += 2) {
+      const x = pts[i], y = pts[i + 1];
+      // o ponto mais antigo do que ja foi desenhado que este reencontra
+      let hit = -1;
+      for (let k = 0; k + 2 * LOOP_MIN < out.length; k += 2)
+        if ((out[k] - x) ** 2 + (out[k + 1] - y) ** 2 < LOOP_GAP * LOOP_GAP) { hit = k; break; }
+      if (hit >= 0) out.length = hit + 2;   // fica o ponto antigo, some o desvio
+      out.push(x, y);
+    }
+    return out;
+  }
+
+  function drawRoute() {
+    const line = root.querySelector('.route-line'), edge = root.querySelector('.route-edge');
+    if (!route || !graph || !frame || !track || track.id !== FREE_ROAM) {
+      line.setAttribute('d', ''); edge.setAttribute('d', '');
+      routeWorld = []; routeAlong = []; routeTotal = 0; routeAt = 0;
+      return;
+    }
+    const pts = dropExcursions(routePoints(route, lastPose));
+    let d = '', L = 0, lx = 0, ly = 0;
+    routeWorld = pts;
+    routeAlong = [];
+    for (let i = 0; i < pts.length; i += 2) {
+      const px = (pts[i] - frame.ulx) / frame.width * 512, py = (frame.uly - pts[i + 1]) / frame.width * 512;
+      if (i) L += Math.hypot(px - lx, py - ly);
+      routeAlong.push(L);
+      lx = px; ly = py;
+      d += (i ? 'L' : 'M') + px.toFixed(2) + ' ' + py.toFixed(2);
+    }
+    routeTotal = L;
+    routeAt = 0;
+    routeCut = -1;
+    line.setAttribute('d', d); edge.setAttribute('d', d);
+    applyCut(0);
+  }
+
+  // ---- o trecho ja percorrido some ----
+  // O carro e projetado na rota (o vertice mais perto, procurado a partir do
+  // ultimo); o que ficou para tras e escondido por stroke-dasharray, que so e
+  // trocado quando o corte anda ROUTE_STEP pixels do mapa. Longe da rota
+  // (saiu dela, o GPS vai recalcular) nada e escondido.
+  let routeWorld = [], routeAlong = [], routeTotal = 0, routeAt = 0, routeCut = -1;
+  const ROUTE_STEP = 0.5;       // pixels do TRACKMAP
+  const ROUTE_NEAR = 60;        // unidades do mundo: mais longe que isso, fora da rota
+  const ROUTE_LOOK = 40;        // vertices a frente procurados a cada pose
+  function applyCut(cut) {
+    const line = root.querySelector('.route-line'), edge = root.querySelector('.route-edge');
+    // um traco do tamanho da rota seguido de um vao do mesmo tamanho, puxado
+    // para tras pelo corte: o comeco cai no vao. (Um traco de comprimento zero,
+    // o jeito obvio, deixa um ponto com a ponta arredondada.)
+    const T = (routeTotal + 1).toFixed(2);
+    const dash = cut > 0 ? T + ' ' + T : 'none', off = cut > 0 ? (-cut).toFixed(2) : '0';
+    for (const el of [line, edge]) { el.style.strokeDasharray = dash; el.style.strokeDashoffset = off; }
+    routeCut = cut;
+  }
+  function trimRoute(p) {
+    const n = routeWorld.length / 2;
+    if (!n) return;
+    let best = -1, bd = ROUTE_NEAR * ROUTE_NEAR;
+    const from = Math.max(0, routeAt - 4), to = Math.min(n - 1, routeAt + ROUTE_LOOK);
+    for (let i = from; i <= to; i++) {
+      const d = (routeWorld[2 * i] - p.x) ** 2 + (routeWorld[2 * i + 1] - p.y) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0) return;                 // fora da rota: deixa como esta
+    routeAt = best;
+    const cut = routeAlong[best];
+    if (Math.abs(cut - routeCut) >= ROUTE_STEP) applyCut(cut);
+  }
+
+  speedloader.on('route', (r) => { route = r; arrived = false; applyFocus(); graphReady.then(drawRoute); });
+
+  speedloader.on('track', (t) => {
+    const changed = !track || track.id !== t.id;
+    track = t;
+    if (changed) pickMap(t.id);
+    placeEvents();
+  });
+  speedloader.on('pose', (p) => {
+    lastPose = p;
+    if (!track || !frame) return;
+    mm.classList.add('on');
+    place(p);
+  });
+  speedloader.on('hide', () => { mm.classList.remove('on'); turnNow = null; });
+  speedloader.on('career', (c) => { career = c; placeEvents(); });
+  speedloader.on('style', (v) => {
+    iconStyle = v === 'nativo' ? 'nativo' : 'pin';
+    mm.classList.toggle('native', iconStyle === 'nativo');
+    placeEvents();
+  });
+
+
+  speedloader.send('ready');
+</script>

@@ -1,0 +1,11 @@
+# The redrawn maps are JeansBig's ("NFSU2 Detailed Map"), 461 MB: not ours to
+# publish. tools\extract-maps.ps1 puts them here from the pack's zip.
+maps/*.dds
+maps/README-DetailedMap.txt
+
+# tools/minimap_dev.py output
+build/
+
+Thumbs.db
+desktop.ini
+.DS_Store
