@@ -38,6 +38,30 @@
     display: none;
   }
   .mm.on { display: block; }
+  .mm.paused { visibility: hidden; }   /* the game's pause menu is open */
+  /* Rectangular, as GTA V's: wider than tall; the car keeps its place at 64%
+     of the height. The fade is the round one's, along each axis: opaque to
+     55% of the half size, 0.6 at 75%, gone at the border - two linear masks,
+     intersected. */
+  .mm.rect { width: 340px; height: 214px; }
+  .mm.rect .view {
+    --fade-x: linear-gradient(to right, transparent 0, rgba(0, 0, 0, 0.6) 12.5%, #000 22.5%,
+                              #000 77.5%, rgba(0, 0, 0, 0.6) 87.5%, transparent 100%);
+    --fade-y: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.6) 12.5%, #000 22.5%,
+                              #000 77.5%, rgba(0, 0, 0, 0.6) 87.5%, transparent 100%);
+    -webkit-mask-image: var(--fade-x), var(--fade-y);
+    mask-image: var(--fade-x), var(--fade-y);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+  /* Solid edge, either shape: no fade, a dark outline and a soft shadow. */
+  .mm.solid .view {
+    -webkit-mask-image: none;
+    mask-image: none;
+    box-shadow: 0 0 0 2px rgba(6, 10, 12, 0.85), 0 3px 12px rgba(0, 0, 0, 0.5);
+  }
+  .mm.solid:not(.rect) .view { border-radius: 50%; }
+  .mm.solid.rect .view { border-radius: 3px; }
 
   .view {
     position: absolute; inset: 0;
@@ -243,16 +267,15 @@
   #legend .sw .xedge { stroke: rgba(6, 10, 12, 0.7); stroke-width: 20; stroke-linecap: round; }
   #legend .sw .xmark { stroke: var(--c); stroke-width: 12; stroke-linecap: round; }
   #legend .sw.arrow svg path { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; }
-  #legend .nfs-row.off { opacity: 0.4; }
-  .bighelp {
-    position: absolute; left: 14px; bottom: 12px;
-    padding: 7px 12px;
-    background: rgba(8, 14, 17, 0.75);
-    border-radius: 6px;
-    color: #9fb0b5; font-size: 12px;
-    cursor: default;
+  #legend .nfs-row.off { opacity: 0.28; }
+  /* zoom in, zoom out, recentre: bottom right */
+  .bigctl {
+    position: absolute; right: 14px; bottom: 12px;
+    display: flex; flex-direction: column; gap: 8px;
   }
-  .bighelp b { color: #dfe6e9; font-weight: 600; }
+  .bigctl .nfs-btn-round { width: 2.5em; height: 2.5em; font-size: 15px; }
+  .bigctl svg { width: 1.15em; height: 1.15em; display: block; }
+  .bigctl svg path, .bigctl svg circle { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
   .bigtip {
     position: absolute; left: 0; top: 0;
     padding: 5px 9px;
@@ -299,8 +322,11 @@
               <svg class="bigroute" viewBox="0 0 512 512"><path class="route-edge"/><path class="route-line"/></svg>
               <div id="bigpins"></div>
             </div>
-            <div class="bighelp"><b>Arrastar</b> move &nbsp; <b>Roda</b> zoom &nbsp; <b>WASD</b> move &nbsp;
-              <b>Q E</b> zoom &nbsp; <b>C</b> centraliza</div>
+            <div class="bigctl">
+              <button class="nfs-btn-round" id="bigzin" title="Aproximar (+)"><svg viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></svg></button>
+              <button class="nfs-btn-round" id="bigzout" title="Afastar (-)"><svg viewBox="0 0 20 20"><path d="M4 10h12"/></svg></button>
+              <button class="nfs-btn-round" id="bigrecenter" title="Recentralizar (C)"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="5"/><path d="M10 1.5v4M10 14.5v4M1.5 10h4M14.5 10h4"/></svg></button>
+            </div>
             <div class="bigtip" id="bigtip"></div>
           </div>
         </div>
@@ -353,7 +379,9 @@
     PAINT: '#72101d', BODY: '#107010', PERFORMANCE: '#2b64a4', CARLOT: '#52a3a3',
     SPECIALTY: '#808000', GARAGE: '#5b027d'
   };
-  const colourOf = (kind) => (iconStyle === 'nativo' ? NATIVE_COLOUR[kind] : KIND_COLOUR[kind] || SHOP_COLOUR[kind]) || '#ffffff';
+  const WAYPOINT_COLOUR = '#d63fd6';   // the player's own marker, in both styles
+  const colourOf = (kind) => kind === 'WAYPOINT' ? WAYPOINT_COLOUR :
+    (iconStyle === 'nativo' ? NATIVE_COLOUR[kind] : KIND_COLOUR[kind] || SHOP_COLOUR[kind]) || '#ffffff';
   // o icone dentro do circulo (icons/, Font Awesome Free). Mega Low e os
   // Uniques nao tem icone ainda e ficam de fora.
   const ICON = {
@@ -361,7 +389,8 @@
     SPECIAL: 'xmark.svg',                 // os eventos especiais, o X do mapa (provisorio)
     PAINT: 'spray-can-solid-full.svg', BODY: 'star-solid-full.svg',
     PERFORMANCE: 'wrench-solid-full.svg', CARLOT: 'car-solid-full.svg',
-    SPECIALTY: 'volume-solid-full.svg', GARAGE: 'house-solid-full.svg'
+    SPECIALTY: 'volume-solid-full.svg', GARAGE: 'house-solid-full.svg',
+    WAYPOINT: 'waypoint.svg'              // the player's own marker
   };
 
   const mm = root.getElementById('mm');
@@ -442,7 +471,7 @@
   // Por isso o desenho termina no apoio, a sombra e em volta (sem descer), e
   // eles sobem LIFT pixels do chao.
   const LIFT = 4;
-  const pinsReady = loadPins().catch((e) => console.log('minimap: ' + e.message));
+  const pinsReady = loadPins().catch((e) => console.log('minimap: could not load the map icons: ' + e.message));
 
   // Estilo 'nativo' (main.js, 'style'): circulos como os do minimapa do jogo -
   // cheio numa loja, anel de borda grossa num evento, o especial com um X.
@@ -528,10 +557,17 @@
   // volta com uma rota nova do GPS.
   const ARRIVE = 40;       // unidades do mundo
   let focus = null, arrived = false;
+  // The player's own marker: { x, y } where it was put, { tx, ty } the street
+  // point the GPS was sent to, and whether a route to it has arrived. It goes
+  // when the car gets there, or when the GPS is sent somewhere else.
+  let waypoint = null;
+  const WAYPOINT_NEAR = 40;   // world units between the route's target and the marker's street point
+  const toWaypoint = (t) => waypoint && t && Math.hypot(t.x - waypoint.tx, t.y - waypoint.ty) < WAYPOINT_NEAR;
   const routing = () => route && !arrived;
   function applyFocus() {
     focus = null;
-    if (routing() && route.target) {
+    if (routing() && waypoint && toWaypoint(route.target)) focus = events.find((e) => e.kind === 'WAYPOINT') || null;
+    else if (routing() && route.target) {
       let bd = FOCUS_NEAR * FOCUS_NEAR;
       for (const e of events) {
         const d = (e.wx - route.target.x) ** 2 + (e.wy - route.target.y) ** 2;
@@ -544,8 +580,16 @@
     if (!route || arrived) return;
     const t = route.target;
     const near = t && (p.x - t.x) ** 2 + (p.y - t.y) ** 2 < ARRIVE * ARRIVE;
-    const done = routeWorld.length > 4 && routeAt >= routeWorld.length / 2 - 2;
-    if (near || done) { arrived = true; applyFocus(); }
+    // a marker is reached only by getting to it: a short route rebuilt from
+    // the street next to the car could look walked through at once
+    const done = !(waypoint && toWaypoint(t)) && routeWorld.length > 4 && routeAt >= routeWorld.length / 2 - 2;
+    if (near || done) {
+      arrived = true;
+      if (waypoint && toWaypoint(t)) {
+        waypoint = null; placeEvents();
+      }
+      applyFocus();
+    }
   }
 
   // Na borda, como no minimapa do jogo: o mais proximo de cada categoria
@@ -593,8 +637,28 @@
     return { x: X, y: Y - H / 2, f };
   }
 
+  // The radar's outline. Round: a point's "out" is its distance over the
+  // radius. Rectangular: the larger of |x| and |y| over the half width and the
+  // half height, 1 on the border. rim(vx, vy, at) scales a direction to reach
+  // the outline times `at`.
+  const isRect = () => mm.classList.contains('rect');
+  function outOf(x, y) {
+    const hw = mm.clientWidth / 2, hh = mm.clientHeight / 2;
+    return isRect() ? Math.max(Math.abs(x) / hw, Math.abs(y) / hh) : Math.hypot(x, y) / hw;
+  }
+  function rim(vx, vy, at) {
+    const o = outOf(vx, vy) || 1;
+    return at / o;
+  }
+  // With a solid edge there is no fade: an edge pin shows as soon as its
+  // target leaves the frame, and sits just inside the border.
+  const isSolid = () => mm.classList.contains('solid');
+  const EDGE_SOLID_AT = 0.93, EDGE_SOLID_IN = 0.97, EDGE_SOLID_FULL = 1.15;
+
   function placeEdges(gx, gy, s, r) {
-    const R = mm.clientWidth / 2;
+    const R = Math.min(mm.clientWidth, mm.clientHeight) / 2;
+    const solid = isSolid();
+    const edgeIn = solid ? EDGE_SOLID_IN : EDGE_IN, edgeFull = solid ? EDGE_SOLID_FULL : EDGE_FULL;
     const cr = Math.cos(r * Math.PI / 180), sr = Math.sin(r * Math.PI / 180);
     const best = {};
     for (const e of events) {
@@ -609,15 +673,15 @@
       const pnt = project(b.fx, b.fy);
       // quanto do alvo ja saiu de vista: 0 enquanto o ponto projetado esta no
       // mapa, 1 quando ja esta bem fora; atras da camera, fora de vez
-      const out = pnt ? Math.hypot(pnt.x, pnt.y) / R : EDGE_FULL;
-      const appear = Math.min(1, Math.max(0, (out - EDGE_IN) / (EDGE_FULL - EDGE_IN)));
+      const out = pnt ? outOf(pnt.x, pnt.y) : edgeFull;
+      const appear = Math.min(1, Math.max(0, (out - edgeIn) / (edgeFull - edgeIn)));
       if (appear <= 0) { if (edges[cat]) edges[cat].style.opacity = 0; continue; }
       // direcao: do ponto projetado; atras da camera, a do plano
       const vx = pnt ? pnt.x : b.fx, vy = pnt ? pnt.y : b.fy;
       const dist = Math.hypot(vx, vy) || 1;
       b.sx = vx; b.sy = vy;
       const el = edgeFor(b.e);
-      const k = R * EDGE_RADIUS / dist;
+      const k = rim(vx, vy, solid ? EDGE_SOLID_AT : EDGE_RADIUS);
       // a ponta aponta para fora, na direcao do alvo: o pino "de pe" aponta
       // para baixo (90 graus), entao gira de angulo - 90
       const turn = iconStyle === 'nativo' ? 0 : Math.atan2(b.sy, b.sx) * 180 / Math.PI - 90;
@@ -644,31 +708,39 @@
       // pela pista entre as do gatilho -, e a especial ganha o X.
       const byHash = {};
       for (const ev of starts) byHash[ev.hash] = ev;
+      // A special event is a race of one kind, and follows that kind's legend
+      // filter: the game files specials under a category of their own, which
+      // the legend does not show, so they would never hide.
+      const RACE_CAT = { CIRCUIT: 0, DRAG: 1, STREET: 2, DRIFT: 3, SPRINT: 4, URL: 5, SUV: 6 };
+      const off = career.off || [];
       const seen = new Set();
       for (const c of career.races) {
         const ev = byHash[c.trigger];
         if (!ev) continue;
         const r = ev.races.find((x) => x.track === c.track) || ev.races[0];
         const k = r.kind, icon = c.special ? 'SPECIAL' : 'RACE';
+        if (c.special && off[RACE_CAT[k]]) continue;
         const key = c.trigger + ':' + k + ':' + icon;
         if (seen.has(key)) continue;
         seen.add(key);
         addPin(ev.x, ev.y, colourOf(k), icon, r.name || k,
                'race:' + (c.special ? 'SPECIAL' : k), k,
-               (c.special ? 'Especial - ' : '') + KIND_NAME[k] + (r.name ? '  (' + r.name + ')' : ''));
+               (c.special ? 'Especial - ' : '') + KIND_NAME[k]);
       }
     } else {
       for (const ev of starts) {
         const k = kindOf(ev);
         addPin(ev.x, ev.y, colourOf(k), 'RACE',
                ev.races.map((x) => x.name || x.kind).join(', '), 'race:' + k, k,
-               KIND_NAME[k] + '  (' + ev.races.map((x) => x.name || x.kind).join(', ') + ')');
+               KIND_NAME[k]);
       }
     }
     for (const sh of shops)
       if (!zone || zone.has(sh.zone))
         addPin(sh.x, sh.y, colourOf(sh.kind), sh.kind, sh.name, 'shop:' + sh.kind, sh.kind,
-               KIND_NAME[sh.kind] + '  (' + sh.name + ')');
+               KIND_NAME[sh.kind]);
+    if (waypoint)
+      addPin(waypoint.x, waypoint.y, colourOf('WAYPOINT'), 'WAYPOINT', 'Marcador', 'waypoint', 'WAYPOINT', 'Marcador');
     applyFocus();
     if (bigOn) buildBigMarkers();
   }
@@ -732,7 +804,7 @@
     const stand = 'scale(' + (1 / s) + ') rotate(' + (-r) + 'deg) rotateX(' + (-TILT) + 'deg) ' +
                   'translate(-50%,-100%)';
     const pinLift = 'translateZ(' + (LIFT / s).toFixed(3) + 'px) ';
-    const R = mm.clientWidth / 2;
+    const solid = isSolid();
     const cr = Math.cos(r * Math.PI / 180), sr = Math.sin(r * Math.PI / 180);
     for (const e of events) {
       if (!e.flat) {
@@ -743,10 +815,11 @@
       // mesmo degrade do radar (opaco ate 55% do raio, some ate a borda)
       const dx = (e.gx - gx) * s, dy = (e.gy - gy) * s;
       const q = project(dx * cr - dy * sr, dx * sr + dy * cr);
-      const out = q ? Math.hypot(q.x, q.y) / R : 2;
+      const out = q ? outOf(q.x, q.y) : 2;
       if (out > 1.05) { if (e.el.style.display !== 'none') e.el.style.display = 'none'; continue; }
       if (e.el.style.display === 'none' && !(routing() && e !== focus)) e.el.style.display = '';
-      e.el.style.opacity = Math.min(1, Math.max(0, (1 - out) / 0.45));
+      // the radar's fade, or whole until a solid border
+      e.el.style.opacity = solid ? (out > 1 ? 0 : 1) : Math.min(1, Math.max(0, (1 - out) / 0.45));
       e.el.style.transform = 'translate(' + q.x.toFixed(1) + 'px,' + q.y.toFixed(1) + 'px) scale(' + q.f.toFixed(3) + ')';
     }
     placeRivals(p.rivals || [], s, r);
@@ -758,12 +831,13 @@
 
     // o norte corre pelo aro: na tela ele fica a r graus de "para cima"
     const a = (r - 90) * Math.PI / 180;
-    const rad = mm.clientWidth * 0.42;   // dentro do degrade, onde ainda se le
+    // inside the fade, where it still reads, or just inside a solid border
+    const nk = rim(Math.cos(a), Math.sin(a), isSolid() ? 0.86 : 0.84);
     north.style.transform =
-      'translate(' + (Math.cos(a) * rad) + 'px,' + (Math.sin(a) * rad) + 'px) rotate(' + r + 'deg)';
+      'translate(' + (Math.cos(a) * nk) + 'px,' + (Math.sin(a) * nk) + 'px) rotate(' + r + 'deg)';
   }
 
-  loadEvents().catch((e) => console.log('minimap: ' + e.message));
+  loadEvents().catch((e) => console.log('minimap: could not load the race and shop list: ' + e.message));
 
   // ---- a rota do GPS ----
   // graph.json: no -> [rua, ponto, rua, ponto], as duas ruas que ele liga;
@@ -777,7 +851,7 @@
     graph = g.nodes;
     streets = {};
     for (const l of r.lines) streets[l.id] = l.p;
-  }).catch((e) => console.log('minimap: grafo ' + e.message));
+  }).catch((e) => console.log('minimap: could not load the GPS road graph: ' + e.message));
 
   function nearestPoint(p, x, y) {
     let best = 0, bd = Infinity;
@@ -801,6 +875,27 @@
     }
     return best ? { a: best.street, pa: best.idx, b: best.street, pb: best.idx } : null;
   }
+
+  // The street point nearest the car, for main.js to start the game's GPS
+  // search from when the car is off the streets (a car park, a lot): the
+  // game starts from the car itself, finds no road near it and gives up.
+  // { x, y, d, cx, cy }: the point, its distance, and where the car was.
+  function streetNearCar() {
+    if (!streets || !lastPose) return null;
+    const n = onStreet(lastPose);
+    const q = n && streets[n.a];
+    if (!q) return null;
+    const x = q[2 * n.pa], y = q[2 * n.pa + 1];
+    return { x, y, street: n.a, idx: n.pa, d: Math.hypot(x - lastPose.x, y - lastPose.y), cx: lastPose.x, cy: lastPose.y };
+  }
+  let snapSent = null;
+  setInterval(() => {
+    if (!track || track.id !== FREE_ROAM) return;
+    const sn = streetNearCar();
+    if (!sn || (snapSent && Math.hypot(sn.cx - snapSent.cx, sn.cy - snapSent.cy) < 1)) return;
+    snapSent = sn;
+    frsmodloader.send('snap', sn);
+  }, 500);
 
   // os pontos da rua de i a j, na ordem que o carro anda
   function walk(out, p, i, j) {
@@ -968,6 +1063,7 @@
     if (!route || !graph || !frame || !track || track.id !== FREE_ROAM) {
       line.setAttribute('d', ''); edge.setAttribute('d', '');
       routeWorld = []; routeAlong = []; routeTotal = 0; routeAt = 0;
+      if (bigOn) copyRoute();          // the expanded map drops it too
       return;
     }
     const pts = dropExcursions(routePoints(route, lastPose));
@@ -1023,23 +1119,47 @@
     if (Math.abs(cut - routeCut) >= ROUTE_STEP) applyCut(cut);
   }
 
-  speedloader.on('route', (r) => { route = r; arrived = false; applyFocus(); graphReady.then(drawRoute); });
+  frsmodloader.on('route', (r) => {
+    route = r; arrived = false;
+    if (waypoint) {
+      // A null route is the search being redone (off the route, off the
+      // streets): the marker stays. Only a route to somewhere else takes it.
+      if (r && toWaypoint(r.target) && !waypoint.routed) {
+        waypoint.routed = true;
+        frsmodloader.send('waypoint-routed');
+      }
+      else if (r && r.target && waypoint.routed) {
+        waypoint = null; placeEvents();
+      }
+    }
+    applyFocus();
+    graphReady.then(drawRoute);
+  });
 
-  speedloader.on('track', (t) => {
+  frsmodloader.on('track', (t) => {
     const changed = !track || track.id !== t.id;
     track = t;
     if (changed) pickMap(t.id);
     placeEvents();
   });
-  speedloader.on('pose', (p) => {
+  frsmodloader.on('pose', (p) => {
     lastPose = p;
     if (!track || !frame) return;
     mm.classList.add('on');
     place(p);
   });
-  speedloader.on('hide', () => { mm.classList.remove('on'); turnNow = null; });
-  speedloader.on('career', (c) => { career = c; placeEvents(); });
-  speedloader.on('style', (v) => {
+  frsmodloader.on('hide', () => { mm.classList.remove('on'); turnNow = null; });
+  frsmodloader.on('career', (c) => { career = c; placeEvents(); });
+  frsmodloader.on('paused', (v) => mm.classList.toggle('paused', !!v));
+  frsmodloader.on('shape', (v) => {
+    mm.classList.toggle('rect', v === 'retangular');
+    if (lastPose && track && frame) place(lastPose);
+  });
+  frsmodloader.on('edge', (v) => {
+    mm.classList.toggle('solid', v === 'solida');
+    if (lastPose && track && frame) place(lastPose);
+  });
+  frsmodloader.on('style', (v) => {
     iconStyle = v === 'nativo' ? 'nativo' : 'pin';
     mm.classList.toggle('native', iconStyle === 'nativo');
     placeEvents();
@@ -1073,7 +1193,16 @@
   const keys = new Set();
   let dragging = null, bigMarkers = [], meEl = null, rivalEls = [];
 
-  const zMin = () => Math.min(bigView.clientWidth, bigView.clientHeight) / 512 * 0.9;
+  // Zoomed all the way out the image just fills the view, and the camera never
+  // shows past its edges.
+  const zMin = () => Math.max(bigView.clientWidth, bigView.clientHeight) / 512;
+  function clampCam(c) {
+    const hx = bigView.clientWidth / 2 / c.z, hy = bigView.clientHeight / 2 / c.z;
+    const x = Math.min(512 - hx, Math.max(hx, c.x)), y = Math.min(512 - hy, Math.max(hy, c.y));
+    const hit = { x: x !== c.x, y: y !== c.y };
+    c.x = x; c.y = y;
+    return hit;
+  }
   const clampZ = (z) => Math.min(Z_MAX, Math.max(zMin(), z));
   function toMap(x, y) {
     return { mx: (x - frame.ulx) / frame.width * 512, my: (frame.uly - y) / frame.width * 512 };
@@ -1095,7 +1224,10 @@
       const { mx, my } = toMap(e.wx, e.wy);
       el.style.left = (mx * WORLD) + 'px';
       el.style.top = (my * WORLD) + 'px';
-      el.dataset.tip = e.label;
+      el.dataset.tip = e.label + '  -  clique para marcar no GPS';
+      el.dataset.wx = e.wx; el.dataset.wy = e.wy;
+      el.dataset.kind = e.kind;
+      if (e.kind === 'WAYPOINT') el.dataset.tip = 'Marcador  -  duplo clique para remover';
       bigPins.appendChild(el);
       bigMarkers.push(el);
     }
@@ -1108,6 +1240,7 @@
     buildLegend();
   }
 
+
   function buildLegend() {
     const count = {};
     for (const e of events) count[e.kind] = (count[e.kind] || 0) + 1;
@@ -1115,7 +1248,7 @@
     const swatch = (colour, html, extra) => '<span class="sw' + (extra || '') + '" style="--c:' + colour + '">' + html + '</span>';
     const row = ([kind, name, cat], icon) => {
       const hidden = !!off[cat];
-      return '<li class="nfs-row nfs-row--clickable' + (hidden ? ' off' : ' nfs-row--on') + '" data-cat="' + cat +
+      return '<li class="nfs-row nfs-row--clickable' + (hidden ? ' off' : '') + '" data-cat="' + cat +
         '" data-on="' + (hidden ? 0 : 1) + '"><span class="nfs-check' + (hidden ? ' nfs-check--off' : '') + '">' +
         (hidden ? '' : '&#10003;') + '</span>' + swatch(colourOf(kind), markup(icon)) +
         '<span class="nfs-row__label">' + name + '</span><span class="nfs-row__value">' + (hidden ? '-' : (count[kind] || 0)) + '</span></li>';
@@ -1134,10 +1267,19 @@
   legendEl.addEventListener('click', (ev) => {
     const r = ev.target.closest('[data-cat]');
     if (!r) return;
-    speedloader.send('filter', { cat: +r.dataset.cat, on: r.dataset.on !== '1' });
+    const on = r.dataset.on !== '1';
+    frsmodloader.send('filter', { cat: +r.dataset.cat, on });
+    sound(on ? 'valueRight' : 'valueLeft');
     ev.stopPropagation();
   });
   legendEl.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+  legendEl.addEventListener('mouseover', (ev) => {
+    const r = ev.target.closest('[data-cat]');
+    if (r === hoverRow) return;
+    hoverRow = r;
+    if (r) sound('down');
+  });
+  legendEl.addEventListener('mouseleave', () => { hoverRow = null; });
 
   function copyRoute() {
     const line = root.querySelector('.route-line');
@@ -1193,11 +1335,14 @@
       tcam.x += vel.x; tcam.y += vel.y;
       vel.x *= INERTIA; vel.y *= INERTIA;
     }
-    tcam.x = Math.min(560, Math.max(-48, tcam.x));
-    tcam.y = Math.min(560, Math.max(-48, tcam.y));
+    tcam.z = clampZ(tcam.z);                  // the view may have been resized
+    const hit = clampCam(tcam);
+    if (hit.x) vel.x = 0;
+    if (hit.y) vel.y = 0;
     cam.x += (tcam.x - cam.x) * CAM_EASE;
     cam.y += (tcam.y - cam.y) * CAM_EASE;
     cam.z += (tcam.z - cam.z) * CAM_EASE;
+    clampCam(cam);                            // easing out of a zoom must not show the edge either
     const k = cam.z / WORLD;
     bigWorld.style.transform = 'translate(' + (bigView.clientWidth / 2 - cam.x * cam.z).toFixed(2) + 'px,' +
       (bigView.clientHeight / 2 - cam.y * cam.z).toFixed(2) + 'px) scale(' + k.toFixed(5) + ')';
@@ -1236,16 +1381,21 @@
   // mouse: arrastar (com inercia ao soltar), roda (zoom para o cursor),
   // duplo clique (aproxima ali)
   bigView.addEventListener('pointerdown', (ev) => {
-    dragging = { x: ev.clientX, y: ev.clientY, t: performance.now() };
+    // a click (no drag) on a pin sets the GPS there; the target is kept here
+    // because, with the pointer captured, pointerup lands on bigView
+    const pin = ev.target.closest && ev.target.closest('.bigpin');
+    dragging = { x: ev.clientX, y: ev.clientY, t: performance.now(), pin, moved: 0 };
     vel.x = vel.y = 0;
     bigView.classList.add('drag');
     bigView.setPointerCapture(ev.pointerId);
   });
   bigView.addEventListener('pointermove', (ev) => {
     if (dragging) {
+      dragging.moved += Math.abs(ev.clientX - dragging.x) + Math.abs(ev.clientY - dragging.y);
       const dx = (ev.clientX - dragging.x) / cam.z, dy = (ev.clientY - dragging.y) / cam.z;
       tcam.x -= dx; tcam.y -= dy;
-      cam.x -= dx; cam.y -= dy;          // o mapa segue a mao sem atraso
+      clampCam(tcam);
+      cam.x = tcam.x; cam.y = tcam.y;    // o mapa segue a mao sem atraso
       const now = performance.now(), dt = Math.max(1, now - dragging.t);
       vel.x = -dx * 16 / dt; vel.y = -dy * 16 / dt;
       dragging.x = ev.clientX; dragging.y = ev.clientY; dragging.t = now;
@@ -1253,6 +1403,7 @@
       return;
     }
     const pin = ev.target.closest && ev.target.closest('.bigpin');
+    if (pin !== hoverPin) { hoverPin = pin; if (pin) sound('down'); }
     if (pin && pin.dataset.tip) {
       bigTip.textContent = pin.dataset.tip;
       bigTip.style.display = 'block';
@@ -1260,9 +1411,41 @@
       bigTip.style.transform = 'translate(' + (ev.clientX - r.left + 14) + 'px,' + (ev.clientY - r.top + 12) + 'px)';
     } else bigTip.style.display = 'none';
   });
-  const endDrag = () => {
+  const CLICK_SLOP = 6;   // screen pixels: up to this it is a click, not a drag
+
+  // The game's menu sounds (docs/UI-KIT.md, "Keyboard and sounds"): the
+  // highlight moving onto another pin or legend row, a value changing (a
+  // filter, the zoom), something that acts (the GPS, recentring), and "wrong"
+  // for a zoom already at its end. Opening and closing are left to the game's
+  // own map screen, which is underneath and sounds them itself.
+  function sound(name) { try { frsmodloader.sound(name); } catch (e) {} }
+  let hoverPin = null, hoverRow = null;
+  function zoomStep(f) {
+    const nz = clampZ(tcam.z * f);
+    if (Math.abs(nz - tcam.z) < 1e-6) { sound('wrong'); return; }
+    tcam.z = nz;
+    sound(f > 1 ? 'valueRight' : 'valueLeft');
+  }
+  const endDrag = (ev) => {
     if (!dragging) return;
+    // two clicks: on empty map a marker, on the marker it goes; on an event
+    // pin a single click already set the GPS
+    const onMarker = dragging.pin && dragging.pin.dataset.kind === 'WAYPOINT';
+    if (dragging.moved < CLICK_SLOP && (!dragging.pin || onMarker) && ev && ev.type === 'pointerup') {
+      const now = performance.now();
+      if (lastClick && now - lastClick.t < DOUBLE_MS &&
+          Math.hypot(ev.clientX - lastClick.x, ev.clientY - lastClick.y) < DOUBLE_PX) {
+        lastClick = null;
+        if (onMarker) clearWaypoint(); else placeWaypoint(ev.clientX, ev.clientY);
+      } else lastClick = { t: now, x: ev.clientX, y: ev.clientY };
+    } else lastClick = null;
     if (performance.now() - dragging.t > 80) vel.x = vel.y = 0;   // soltou parado: sem inercia
+    const pin = dragging.pin;
+    if (pin && dragging.moved < CLICK_SLOP && pin.dataset.kind !== 'WAYPOINT') {
+      vel.x = vel.y = 0;
+      frsmodloader.send('gps', { x: +pin.dataset.wx, y: +pin.dataset.wy, from: streetNearCar() });
+      sound('confirm');
+    }
     dragging = null;
     bigView.classList.remove('drag');
   };
@@ -1280,26 +1463,81 @@
     tcam.y = py - (sy - bigView.clientHeight / 2) / nz;
     tcam.z = nz;
   }, { passive: false });
-  bigView.addEventListener('dblclick', (ev) => {
-    const r = bigView.getBoundingClientRect();
-    const p = screenToMap(ev.clientX - r.left, ev.clientY - r.top);
-    tcam.x = p.x; tcam.y = p.y; tcam.z = clampZ(tcam.z * 2);
+  // A double click puts the player's marker there and sends the GPS to it.
+  // The loader hands every click to the page with a click count of 1, so the
+  // browser never raises dblclick: two clicks close in time and place are
+  // told apart here (endDrag).
+  const DOUBLE_MS = 400, DOUBLE_PX = 8;
+  const WAYPOINT_TRIES = 5;   // streets tried around a marker, nearest first
+  // main.js moved on to another street, or ran out of them
+  frsmodloader.on('waypoint-target', (t) => { if (waypoint && t) { waypoint.tx = t.x; waypoint.ty = t.y; } });
+  frsmodloader.on('waypoint-failed', () => {
+    if (!waypoint || waypoint.routed) return;
+    waypoint = null;
+    placeEvents();
+    sound('wrong');
   });
+  let lastClick = null;
+  function clearWaypoint() {
+    if (!waypoint) return;
+    waypoint = null;
+    route = null;
+    frsmodloader.send('waypoint-clear');
+    placeEvents();
+    drawRoute();
+    sound('valueLeft');
+  }
+  function placeWaypoint(clientX, clientY) {
+    if (!frame || !track || track.id !== FREE_ROAM) return;
+    const r = bigView.getBoundingClientRect();
+    const p = screenToMap(clientX - r.left, clientY - r.top);
+    const x = frame.ulx + p.x / 512 * frame.width, y = frame.uly - p.y / 512 * frame.width;
+    // where the GPS may go: the nearest point of each of the nearest streets,
+    // closest first; main.js tries the next when the GPS finds no way there
+    const targets = [];
+    if (streets) {
+      for (const id in streets) {
+        const q = streets[id];
+        let bi = 0, bd = Infinity;
+        for (let i = 0; i < q.length; i += 2) {
+          const d = (q[i] - x) ** 2 + (q[i + 1] - y) ** 2;
+          if (d < bd) { bd = d; bi = i; }
+        }
+        targets.push({ x: q[bi], y: q[bi + 1], street: +id, idx: bi / 2, d: bd });
+      }
+      targets.sort((a, b) => a.d - b.d);
+      targets.length = Math.min(targets.length, WAYPOINT_TRIES);
+    }
+    if (!targets.length) targets.push({ x, y, d: 0 });
+    waypoint = { x, y, tx: targets[0].x, ty: targets[0].y, routed: false };
+    placeEvents();
+    frsmodloader.send('waypoint', { targets: targets.map((t) => ({ x: t.x, y: t.y, street: t.street, idx: t.idx })),
+                                    from: streetNearCar() });
+    sound('confirm');
+  }
   window.addEventListener('keydown', (ev) => {
     if (!bigOn) return;
     const k = ev.key.toLowerCase();
-    if (k === 'escape' || k === 'm') { speedloader.send('bigmap-close'); ev.preventDefault(); return; }
-    if (k === 'c' || k === ' ') { centerOnPlayer(); ev.preventDefault(); return; }
+    if (k === 'escape' || k === 'm') { frsmodloader.send('bigmap-close'); ev.preventDefault(); return; }
+    if (k === 'c' || k === ' ') { centerOnPlayer(); sound('confirm'); ev.preventDefault(); return; }
     keys.add(k);
     ev.preventDefault();
   });
   window.addEventListener('keyup', (ev) => keys.delete(ev.key.toLowerCase()));
 
-  root.getElementById('bigback').addEventListener('click', () => speedloader.send('bigmap-close'));
-  root.getElementById('bigcenter').addEventListener('click', () => centerOnPlayer());
-  for (const b of [root.getElementById('bigback'), root.getElementById('bigcenter')])
-    b.addEventListener('pointerdown', (ev) => ev.stopPropagation());
-  speedloader.on('bigmap', (on) => { if (on) openBig(); else closeBig(); });
+  root.getElementById('bigback').addEventListener('click', () => frsmodloader.send('bigmap-close'));
+  root.getElementById('bigcenter').addEventListener('click', () => { centerOnPlayer(); sound('confirm'); });
+  const BTN_ZOOM = 1.6;
+  root.getElementById('bigzin').addEventListener('click', () => zoomStep(BTN_ZOOM));
+  root.getElementById('bigzout').addEventListener('click', () => zoomStep(1 / BTN_ZOOM));
+  root.getElementById('bigrecenter').addEventListener('click', () => { centerOnPlayer(); sound('confirm'); });
+  // the highlight moving onto a button
+  for (const id of ['bigback', 'bigcenter', 'bigzin', 'bigzout', 'bigrecenter'])
+    root.getElementById(id).addEventListener('mouseenter', () => sound('right'));
+  // the buttons do not start a drag on the map
+  for (const id of ['bigback', 'bigcenter', 'bigzin', 'bigzout', 'bigrecenter'])
+    root.getElementById(id).addEventListener('pointerdown', (ev) => ev.stopPropagation());
+  frsmodloader.on('bigmap', (on) => { if (on) openBig(); else closeBig(); });
 
-  speedloader.send('ready');
+  frsmodloader.send('ready');
 </script>

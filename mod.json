@@ -1,8 +1,107 @@
 {
   "id": "frsminimap",
   "name": "FRSMiniMap",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "author": "Chrystian Farias",
   "main": "main.js",
   "ui": "ui/index.html",
-  "enabled": true
+  "enabled": true,
+  "description": "Minimapa em perspectiva 3D e mapa expandido no M, com os eventos da carreira, rota do GPS e adversarios.",
+  "thumb": "thumb.jpg",
+  "settings": [
+    {
+      "type": "section",
+      "label": "Minimapa"
+    },
+    {
+      "id": "shape",
+      "type": "choice",
+      "label": "Formato",
+      "default": "redondo",
+      "options": [
+        {
+          "value": "redondo",
+          "label": "Redondo"
+        },
+        {
+          "value": "retangular",
+          "label": "Retangular"
+        }
+      ],
+      "description": "Redondo ou retangular (como o do GTA V)"
+    },
+    {
+      "id": "edge",
+      "type": "choice",
+      "label": "Borda",
+      "default": "infinita",
+      "options": [
+        {
+          "value": "infinita",
+          "label": "Infinita"
+        },
+        {
+          "value": "solida",
+          "label": "Solida"
+        }
+      ],
+      "description": "Infinita: o mapa se dissolve nas bordas. Solida: borda marcada, com contorno"
+    },
+    {
+      "id": "icons",
+      "type": "choice",
+      "label": "Icones",
+      "default": "pin",
+      "options": [
+        {
+          "value": "pin",
+          "label": "Pinos"
+        },
+        {
+          "value": "nativo",
+          "label": "Nativos"
+        }
+      ],
+      "description": "Pinos com icone e as cores do mod, ou os circulos e as cores do minimapa do jogo"
+    },
+    {
+      "id": "turn",
+      "type": "choice",
+      "label": "Girar com",
+      "default": "camera",
+      "options": [
+        {
+          "value": "camera",
+          "label": "Camera"
+        },
+        {
+          "value": "carro",
+          "label": "Carro"
+        }
+      ],
+      "description": "O mapa gira com a camera (como no GTA) ou com o carro"
+    },
+    {
+      "id": "dynamicZoom",
+      "type": "toggle",
+      "label": "Zoom dinamico",
+      "default": true,
+      "on": "Sim",
+      "off": "Nao",
+      "description": "O zoom abre com a velocidade, ate um limite"
+    },
+    {
+      "type": "section",
+      "label": "HUD"
+    },
+    {
+      "id": "gpsArrow",
+      "type": "toggle",
+      "label": "Seta azul do GPS",
+      "default": false,
+      "on": "Mostrar",
+      "off": "Esconder",
+      "description": "O marcador azul que flutua a frente do carro quando ha rota no GPS"
+    }
+  ]
 }

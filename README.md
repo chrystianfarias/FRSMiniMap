@@ -1,7 +1,9 @@
+![FRSMiniMap](docs/cover.jpg)
+
 # FRSMiniMap
 
 A 3D minimap for **NFS Underground 2** (`SPEED2.EXE` v1.2 NTSC), built on
-[SpeedLoader](../SpeedLoader). It replaces the game's radar with a tilted map
+[FRSModLoader](https://github.com/chrystianfarias/SpeedLoader). It replaces the game's radar with a tilted map
 in perspective that turns with the camera, and reads everything it shows from
 the game itself: the map, the races and shops the career has open, the
 legend's filters, the GPS route, the other racers.
@@ -29,54 +31,99 @@ legend's filters, the GPS route, the other racers.
 - **Hides the stock minimap**, and nothing else of the HUD; optionally, also
   the blue GPS arrow that floats ahead of the car.
 - **An expanded map on M**, in place of the game's: full screen, drag to pan
-  with inertia, wheel to zoom towards the cursor, keyboard too, and a legend
-  that turns each kind on and off in the game's own filter.
+  with inertia, wheel to zoom towards the cursor, keyboard too; a click on an
+  event sets the GPS, a double click puts a marker of your own with its route.
 
 ## Requirements
 
-- SpeedLoader installed in the game, with its `GameTextures`
-  (`http://nfsu2.tex/`, including `mod/<id>/<path>.dds`) and `GameData`
-  (`http://nfsu2.data/`: `roads.json`, `graph.json`, `events.json`,
-  `shops.json`) hosts.
-- Optional, for the sharp maps: the "NFSU2 Detailed Map v1" pack by JeansBig,
-  **the zip as downloaded**, next to `mod.json`. Nothing is extracted and
-  nothing of it is installed into the game: SpeedLoader reads each map out of
-  the zip when the minimap asks for it (entries compressed with LZMA, as 7-Zip
-  writes them; the `Default` variant, never `Beta`).
+> **FRSModLoader is required.** FRSMiniMap is a mod *for* the loader, not a
+> standalone `.asi`: without FRSModLoader installed in the game it does
+> nothing at all. Install the loader first.
+
+- **NFS Underground 2** v1.2 NTSC (`SPEED2.EXE`).
+- **[FRSModLoader](https://github.com/chrystianfarias/SpeedLoader)**, a recent
+  build: the minimap reads the game's textures and data through the loader
+  (`http://nfsu2.tex/`, `http://nfsu2.data/`), and its options live in the
+  loader's Options > Mods menu. The loader's release is dropped into the
+  folder with `SPEED2.EXE` (it brings its own `dinput8.dll`, Ultimate ASI
+  Loader); check that `scripts\FRSModLoader.asi` and the
+  `scripts\FRSModLoader\` folder are there before going on.
+- Optional, for the sharp maps: the **"NFSU2 Detailed Map v1"** pack by
+  JeansBig, **the zip as downloaded**. Nothing is extracted and nothing of it
+  goes into the game's files: the loader reads each map out of the zip when
+  the minimap asks for it (entries compressed with LZMA, as 7-Zip writes
+  them; the `Default` variant, never `Beta`). Without it the game's own maps
+  are used (512 px).
 
 ## Install
 
+With the game closed:
+
+1. Install **FRSModLoader** (see its README) and start the game once to make
+   sure it loads: the Options menu gets a **Mods** entry.
+2. Copy this mod into the loader's mods folder, as a folder named
+   `frsminimap`:
+
+   ```
+   <game>\scripts\FRSModLoader\mods\frsminimap\
+     mod.json
+     main.js
+     thumb.jpg
+     ui\
+     maps\
+   ```
+
+3. Optional: put the Detailed Map zip in that same folder, next to
+   `mod.json`, with its name as downloaded
+   (`2d7d87-NFSU2 Detailed Map v1 Reup.zip`).
+4. Start the game. FRSMiniMap shows up in **Options > Mods**, with its
+   picture, its on/off switch and its options.
+
+From a clone of this repository, `install.ps1` does steps 2 and 3 (it also
+copies a zip lying next to `mod.json`):
+
 ```powershell
-# optional: put "2d7d87-NFSU2 Detailed Map v1 Reup.zip" here, next to mod.json
-.\install.ps1                      # F:\Games\NFSU2
+.\install.ps1                          # F:\Games\NFSU2
 .\install.ps1 -GameDir "D:\Games\NFSU2"
 ```
 
-It copies the mod, and the zip if there is one, to
-`<game>\scripts\SpeedLoader\mods\frsminimap\`. The zip can also be dropped
-straight into that folder. It is safe
-with the game running: press F5 on the UI to reload it.
+It only copies files, so it is safe with the game running (F5 on the UI
+reloads the page), and it stops with an error if FRSModLoader is not
+installed in that game folder. Installing or updating the loader with its
+own `install.ps1` replaces the whole `mods` folder: run this one again after
+it.
+
+To uninstall, delete `scripts\FRSModLoader\mods\frsminimap\`, or switch the
+mod off in Options > Mods.
 
 ## In the game
 
-`/minimap` in the console shows the state (position, track, career, GPS) and
-changes the options, which are kept between sessions:
+The options are in the game's **Options > Mods > FRSMiniMap**, kept by the
+loader between sessions:
 
-| Command | |
+| Option | |
 |---|---|
-| `/minimap icones pin \| nativo` | pins with icons, or the game's circles and colours |
-| `/minimap giro camera \| carro` | the map turns with the camera (default) or with the car |
-| `/minimap zoom dinamico \| fixo` | zoom opens with speed (default), or stays |
-| `/minimap seta esconder \| mostrar` | hide (default) or show the HUD's blue GPS arrow |
+| Formato | round (default), or a rectangle as GTA V's |
+| Borda | infinite: the map fades out at the edges (default); or solid, with an outline |
+| Icones | pins with icons (default), or the game's circles and colours |
+| Girar com | the map turns with the camera (default) or with the car |
+| Zoom dinamico | zoom opens with speed (default), or stays |
+| Seta azul do GPS | hide (default) or show the HUD's blue GPS arrow |
 
-On the expanded map (M): drag to pan, wheel or Q/E to zoom, WASD or the arrows
-to move, C to centre on the car, a double click to zoom in there, a click on a
-legend row to show or hide that kind, Esc or M to close.
+`/minimap` in the console shows the state (position, track, career, GPS).
+
+On the expanded map (M): drag to pan, wheel, Q/E or the + and - buttons to zoom, WASD or the arrows
+to move, C or the button under the zoom ones to centre on the car, a click on a pin to set the GPS there, a double click on the map to put a
+marker of your own there with the route to it (a double click on the marker
+takes it away), Esc or M to close. The filters are the game's own, set on its
+pause map.
 
 ## Layout
 
 ```
 mod.json, main.js     the in-game side: reads memory, talks to the page
+thumb.jpg             the picture in Options > Mods
+docs/cover.jpg        the cover at the top of this file
 ui/index.html         the page: draws the map, markers, route
 ui/icons/             pin, player arrow and the markers' icons
 maps/calibration.json framing of the redrawn maps the pack recalibrates

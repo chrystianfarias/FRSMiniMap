@@ -1,4 +1,4 @@
-// FRSMiniMap - minimapa em perspectiva 3D para NFS Underground 2 (SpeedLoader).
+// FRSMiniMap - minimapa em perspectiva 3D para NFS Underground 2 (FRSModLoader).
 //
 // Este lado roda no jogo (QuickJS, a cada frame) e le a memoria; a pagina
 // (ui/index.html) so desenha. O que vai para ela:
@@ -23,9 +23,9 @@
 //   pose   + 0x20  posicao x, y, z (z pra cima; x, y e o plano do mapa)
 //   pose   + 0x30  matriz de rotacao; as LINHAS sao os eixos, linha 0 a frente
 //
-// /minimap no console mostra o estado (pose, pista, carreira, gps) e troca as
-// opcoes: icones nativo|pin, giro camera|carro, zoom dinamico|fixo,
-// seta esconder|mostrar. Os enderecos e formatos estao em NOTES.md.
+// The options live in Options > Mods (mod.json's "settings"): icons, turn,
+// dynamic zoom and the GPS arrow. /minimap in the console prints the state
+// (pose, track, career, GPS). Addresses and formats are in NOTES.md.
 
 const PHYSICS_POSE  = 0x20;
 const POSE_POSITION = 0x20;
@@ -55,6 +55,13 @@ const CAR_SLOT       = 0x14;
 const SLOT_TYPE      = 0x04;
 const SLOT_RACER     = 2;
 const MAX_CARS       = 32;
+// A racer left in the world's list is not always in the world: one stayed put
+// on the map with no car there. A live one is in an active part of the world
+// (car+0x5C0, set by 0x5F6CD0 from its position) and has a rigid body
+// ([car+0x3C]+0x68, hung by 0x5938C0); the ghost fails one of the two.
+const CAR_WORLD_GATE = 0x5C0;
+const CAR_SIM        = 0x3C;
+const SIM_BODY       = 0x68;
 
 // Onde o carro guarda a posicao no mundo: o NOTES diz car+0x510 (o que o
 // construtor escreve) e o spawn-car usa car+0x60. Em vez de apostar, o mod
@@ -154,6 +161,7 @@ let hudPackages = {};   // { nome: { pkg, objs: [objeto...] } }
 const CAR_CONTROLLER = 0x2C;
 const ROUTE_NODES    = 0x428;   // 0x3F0 + 0x38
 const ROUTE_COUNT    = 0x4A9;   // 0x3F0 + 0xB9
+const ROUTE_CODE     = 0x3E4;   // the search's outcome as the car has it; 0 = none
 const ROUTE_MAX      = 64;
 const GPS            = 0x81CBC0;
 const GPS_TARGET     = 0x30;
@@ -167,6 +175,9 @@ function gpsRoute() {
   const car = speed.game.car();
   const ctrl = car ? speed.mem.readPtr(car + CAR_CONTROLLER) : 0;
   if (!ctrl) return null;
+  // code 0 is no route: a cancelled one leaves its nodes behind (0x41EA30
+  // writes only the code when handed none)
+  if (speed.mem.readU32(ctrl + ROUTE_CODE) === 0) return null;
   const n = speed.mem.readI8(ctrl + ROUTE_COUNT);
   if (!n || n <= 0 || n > ROUTE_MAX) return null;
   // Os nos sao lidos da tabela que o jogo tem na memoria ([0x883DB0], 32 bytes
@@ -238,8 +249,7 @@ function instalaBloqueio() {
   const b = speed.mem.readBytes(FE_SET_VISIBLE, 8);
   const got = b ? Array.from(new Uint8Array(b)) : [];
   if (got.join() !== FE_SET_VISIBLE_BYTES.join()) {
-    console.log('minimap: FEngSetVisible ja alterado (' + got.map((x) => x.toString(16)).join(' ') +
-                '); o circulo do GPS do original pode continuar aparecendo');
+    console.log('minimap: another mod changed FEngSetVisible; the original GPS circle may still show');
     return;
   }
   const table = speed.mem.alloc(4 + 4 * BLOCK_MAX);
@@ -266,7 +276,6 @@ function instalaBloqueio() {
   const jmp = [0xE9].concat(le32((stub - (FE_SET_VISIBLE + 5)) >>> 0), [0x90]);
   if (!speed.mem.patch(FE_SET_VISIBLE, jmp)) return;
   blockTable = table;
-  console.log('minimap: FEngSetVisible desviado, o minimapa original nao volta a aparecer');
 }
 
 function atualizaBloqueio() {
@@ -293,7 +302,6 @@ function escondeMinimapaOriginal() {
       }
       h = hudPackages[name] = { pkg, objs };
       atualizaBloqueio();
-      console.log('minimap: ' + name + ' carregado, ' + objs.length + ' objetos do minimapa original escondidos');
     }
     for (const o of h.objs) {
       const f = speed.mem.readU32(o + FE_OBJ_FLAGS);
@@ -367,14 +375,26 @@ function camYaw() {
 const GPS_ARROW_DRAW = 0x5F3CB0;
 const GPS_ARROW_ORIG = [0x55, 0x8B, 0xEC];          // push ebp; mov ebp,esp
 const GPS_ARROW_OFF  = [0xC2, 0x04, 0x00];          // ret 4
-function setaGps() { return speed.store.get('gpsArrow', 'esconder') === 'mostrar' ? 'mostrar' : 'esconder'; }
+// The options used to be console commands, kept in the mod's store; the first
+// time the menu options exist, whatever the player had chosen moves over.
+if (!speed.store.get('settingsMigrated', false)) {
+  const old = { icons: speed.store.get('icons', null), turn: speed.store.get('turn', null),
+                zoom: speed.store.get('zoom', null), gpsArrow: speed.store.get('gpsArrow', null) };
+  if (old.icons === 'nativo' || old.icons === 'pin') speed.settings.set('icons', old.icons);
+  if (old.turn === 'camera' || old.turn === 'carro') speed.settings.set('turn', old.turn);
+  if (old.zoom === 'fixo' || old.zoom === 'dinamico') speed.settings.set('dynamicZoom', old.zoom === 'dinamico');
+  if (old.gpsArrow === 'mostrar' || old.gpsArrow === 'esconder') speed.settings.set('gpsArrow', old.gpsArrow === 'mostrar');
+  speed.store.set('settingsMigrated', true);
+}
+
+function setaGps() { return speed.settings.get('gpsArrow', false) === true ? 'mostrar' : 'esconder'; }
 function aplicaSetaGps() {
   const b = speed.mem.readBytes(GPS_ARROW_DRAW, 3);
   const now = b ? Array.from(new Uint8Array(b)).join() : '';
   const want = setaGps() === 'esconder' ? GPS_ARROW_OFF : GPS_ARROW_ORIG;
   if (now === want.join()) return true;
   if (now !== GPS_ARROW_ORIG.join() && now !== GPS_ARROW_OFF.join()) {
-    console.log('minimap: a funcao da seta do GPS foi alterada por outro mod; nao mexo nela');
+    console.log('minimap: another mod changed the GPS arrow code; the GPS arrow option will not work');
     return false;
   }
   return speed.mem.patch(GPS_ARROW_DRAW, want);
@@ -382,10 +402,10 @@ function aplicaSetaGps() {
 aplicaSetaGps();
 
 // 'dinamico' (padrao) ou 'fixo': o zoom abre com a velocidade ou nao
-function zoomMode() { return speed.store.get('zoom', 'dinamico') === 'fixo' ? 'fixo' : 'dinamico'; }
+function zoomMode() { return speed.settings.get('dynamicZoom', true) === false ? 'fixo' : 'dinamico'; }
 
 // 'camera' (padrao) ou 'carro': com o que o radar gira
-function giro() { return speed.store.get('turn', 'camera') === 'carro' ? 'carro' : 'camera'; }
+function giro() { return speed.settings.get('turn', 'camera') === 'carro' ? 'carro' : 'camera'; }
 
 function mapa(t, x, y) {
   return { px: (x - t.ulx) / t.width * 512, py: (t.uly - y) / t.width * 512 };
@@ -400,7 +420,6 @@ function decideCarPos(p) {
     const v = vec3(me + off);
     if (v && Math.abs(v.x - p.x) < 2 && Math.abs(v.y - p.y) < 2) {
       carPos = off;
-      console.log('minimap: posicao dos carros em car+0x' + off.toString(16));
       return;
     }
   }
@@ -420,6 +439,10 @@ function adversarios() {
     if (car === me) continue;
     const slot = speed.mem.readPtr(car + CAR_SLOT);
     if (!slot || speed.mem.readI32(slot + SLOT_TYPE) !== SLOT_RACER) continue;
+    const gate = speed.mem.readU8(car + CAR_WORLD_GATE);
+    const sim = speed.mem.readPtr(car + CAR_SIM);
+    const body = sim ? speed.mem.readPtr(sim + SIM_BODY) : 0;
+    if (!gate || !body) continue;
     const v = vec3(car + carPos);
     if (!v || !isFinite(v.x) || !isFinite(v.y)) continue;
     const r = rastro[car];
@@ -492,10 +515,14 @@ function confereCarreira(now) {
 }
 
 // O estilo dos marcadores: 'pin' (os pinos com icone) ou 'nativo' (circulos,
-// como o minimapa do jogo: cheios nas lojas, anel grosso nos eventos). Fica
-// guardado no store do mod.
+// como o minimapa do jogo: cheios nas lojas, anel grosso nos eventos).
+// The minimap's shape: 'redondo' (the default) or 'retangular' (as GTA V's).
+function formato() { return speed.settings.get('shape', 'redondo') === 'retangular' ? 'retangular' : 'redondo'; }
+// Its edge: 'infinita' (the default, the map fades out) or 'solida'.
+function borda() { return speed.settings.get('edge', 'infinita') === 'solida' ? 'solida' : 'infinita'; }
+
 function estiloIcones() {
-  const v = speed.store.get('icons', 'pin');
+  const v = speed.settings.get('icons', 'pin');
   return v === 'nativo' ? 'nativo' : 'pin';
 }
 
@@ -515,8 +542,8 @@ function estiloIcones() {
 const WORLD_MAP_PKG = 'UI_InGame_WorldMap.fng';
 const FE_PACKAGE_OPEN = 0x52CF60;
 const PAD_BACK = 0x911AB364;
-const CLOSE_WAIT_MS = 1500;   // quanto esperar o mapa do jogo sair antes de reabrir o nosso
 const CATEGORY_SET = 0x496390;
+const CLOSE_WAIT_MS = 1500;   // quanto esperar o mapa do jogo sair antes de reabrir o nosso
 const BIG_MS = 100;
 let bigOpen = false, bigLast = 0, closingSince = 0;
 
@@ -541,9 +568,21 @@ function fechaMapa(fechaODoJogo) {
   }
 }
 
+// The pause menu and its option pages: the minimap stays out of them.
+const PAUSE_PKGS = ['UI_Pause.fng', 'UI_PauseOptions.fng', 'UI_PauseOptionsMain.fng'];
+let pausedSent = null;
+function conferePausa() {
+  const paused = speed.game.state() === 6 &&
+    PAUSE_PKGS.some((p) => (speed.call(FE_PACKAGE_OPEN, [p], { ret: 'int' }) & 0xFF) !== 0);
+  if (paused === pausedSent) return;
+  pausedSent = paused;
+  speed.ui.send('paused', paused);
+}
+
 function confereMapaGrande(now) {
   if (now - bigLast < BIG_MS) return;
   bigLast = now;
+  conferePausa();
   const aberto = speed.game.state() === 6 && mapaDoJogoAberto();
   // pedido o fechamento, espera o mapa do jogo sair; se nao sair, reabre o
   // nosso (melhor do que deixar o jogador numa tela sem controle)
@@ -558,6 +597,242 @@ function confereMapaGrande(now) {
 
 speed.on('ui:bigmap-close', () => fechaMapa(true));
 
+// A click on a pin of the expanded map sets the GPS there, as picking the item
+// on the game's map does. The map screen (0x4E0964, 0x532DFD) does it so:
+//   0x529480  thiscall(0x838590, &entry): the destination manager; clears the
+//             old GPS and requests a route to the entry's position (integers
+//             at [entry]+0x34/+0x38, through 0x413120)
+//   0x529410  thiscall(0x838590, &entry) -> al: the entry is the destination
+// The entry is found by the pin's position: the nearest one among those the
+// game's map shows right now.
+//   0x4268A0  thiscall(0x81CBC0): one step of the search (A*). Only the world
+//             update calls it (0x609D27), and that stops while paused; with
+//             the map open the mod steps it, so the route shows at once.
+//             Once a frame, as the world update would: each step is a time
+//             slice (it reads the clock, 0x43BDF0, and runs until its budget
+//             is spent), so 40 a frame took the game down to 4 fps.
+const GPS_MANAGER   = 0x838590;
+// thiscall(0x838590): no destination - resets the search (0x4131F0, which also
+// tells the car its route is gone) and clears the manager, as the game does
+// when a route is cancelled. 0x529480 resets only while a destination is
+// active (0x501100 says so, from +0x29 and the last result at GPS+4); after a
+// failed search it does not, and a request the game filed meanwhile keeps the
+// search busy, so the new one was dropped (0x40C440 files only when idle).
+// Clearing first makes every new destination take.
+const GPS_CLEAR     = 0x5010E0;
+const GPS_SET       = 0x529480;
+const GPS_IS_TARGET = 0x529410;
+const GPS_UPDATE    = 0x4268A0;
+const ENTRY_POS     = 0x34;
+const GPS_PICK_NEAR = 60;       // world units between the pin and the entry
+const GPS_STEPS     = 1;        // search slices per frame, with the map open
+
+// Off the streets the GPS has nowhere to start: 0x40C440 files the request
+// with the car's own position as the start (GPS+0x10, x y z), the setup
+// (0x422B90, state 1, sliced over the road sections with the index at +0x40)
+// finds no road near it, and the search ends with no route - "GPS
+// unavailable". The page sends the street point nearest the car ('snap');
+// while the setup has not begun (state 1, +0x40 still 0) the start is moved
+// there, so the route begins on the nearest street. This covers the mod's
+// clicks and the game's own requests (its map, a recalculation).
+const GPS_START   = 0x10;
+const GPS_SECTION = 0x40;
+const SNAP_MIN    = 8;      // world units off the street before the start is moved
+let snap = null;
+
+// A street point's height. The GPS takes a start and a target only within 4
+// units of the street's height (0x422D82: the point's int16 at +0x12, times
+// 2^13 * 2^-16, against the z) - so a marker at the car's height was found
+// only when the ground happened to be as high there. The file has no heights
+// (+0x12 is 0 in RoutesFreeRoam.bin); the game fills them in when it loads
+// the streets: [0x88D21C + 4 i] for i < [0x88D218], each with its id at
+// +0x0A (roads.json's), point count at +0x34 and 0x38-byte points from +0x8C
+// (x, y at +0, +4).
+const STREET_TABLE = 0x88D21C, STREET_COUNT = 0x88D218;
+const STREET_ID = 0x0A, STREET_NPOINTS = 0x34, STREET_POINTS = 0x8C, POINT_SIZE = 0x38, POINT_Z = 0x12;
+const Z_STEP = 0.125;
+let streetPtr = null;   // id -> street, rebuilt when a load moves them
+
+function alturaDaRua(street, idx, x, y) {
+  if (typeof street !== 'number' || typeof idx !== 'number') return null;
+  for (let pass = 0; pass < 2; pass++) {
+    if (!streetPtr || pass) {
+      streetPtr = {};
+      const n = speed.mem.readU32(STREET_COUNT);
+      for (let i = 0; n && i < n && i < 8192; i++) {
+        const st = speed.mem.readPtr(STREET_TABLE + i * 4);
+        if (st) streetPtr[speed.mem.readU16(st + STREET_ID)] = st;
+      }
+    }
+    const st = streetPtr[street];
+    if (!st || idx >= speed.mem.readU16(st + STREET_NPOINTS)) continue;
+    const p = st + STREET_POINTS + idx * POINT_SIZE;
+    const px = speed.mem.readF32(p), py = speed.mem.readF32(p + 4);
+    if (px === null || Math.hypot(px - x, py - y) > 2) continue;   // not that point: look again
+    const z = speed.mem.readI16(p + POINT_Z);
+    return z === null ? null : z * Z_STEP;
+  }
+  return null;
+}
+
+
+function movePartida(from, always) {
+  if (!from || !(always || from.d > SNAP_MIN)) return false;
+  if (speed.mem.readU32(GPS) !== 1 || speed.mem.readU32(GPS + GPS_SECTION) !== 0) return false;
+  speed.mem.writeF32(GPS + GPS_START, from.x);
+  speed.mem.writeF32(GPS + GPS_START + 4, from.y);
+  const z = alturaDaRua(from.street, from.idx, from.x, from.y);
+  if (z !== null) speed.mem.writeF32(GPS + GPS_START + 8, z);
+  return true;
+}
+
+// a request the game filed from where the car is: start it on the street
+function conferePartida() {
+  if (!snap || !(snap.d > SNAP_MIN) || speed.mem.readU32(GPS) !== 1) return;
+  const st = vec3(GPS + GPS_START);
+  if (!st) return;
+  const fromCar = Math.hypot(st.x - snap.cx, st.y - snap.cy) < SNAP_MIN;
+  if (fromCar) movePartida(snap);
+}
+
+speed.on('ui:snap', (p) => {
+  if (p && typeof p.x === 'number' && typeof p.y === 'number' && typeof p.d === 'number') snap = p;
+});
+
+function marcaGps(x, y, from) {
+  if (speed.mem.readU32(MAP_EVENTS_READY) !== 1) return false;
+  let best = 0, bd = GPS_PICK_NEAR * GPS_PICK_NEAR;
+  for (let i = 0; i < MAP_EVENT_COUNT; i++) {
+    const e = MAP_EVENTS + i * MAP_EVENT_SIZE;
+    const p = speed.mem.readPtr(e);
+    if (!p) continue;
+    if ((speed.call(MAP_EVENT_SHOWN, [e], { conv: 'thiscall', ret: 'int' }) & 0xFF) === 0) continue;
+    const ex = speed.mem.readI32(p + ENTRY_POS), ey = speed.mem.readI32(p + ENTRY_POS + 4);
+    if (ex === null || ey === null) continue;
+    const d = (ex - x) * (ex - x) + (ey - y) * (ey - y);
+    if (d < bd) { bd = d; best = e; }
+  }
+  if (!best) return false;
+  if ((speed.call(GPS_IS_TARGET, [GPS_MANAGER, best], { conv: 'thiscall', ret: 'int' }) & 0xFF) !== 0) return true;
+  speed.call(GPS_CLEAR, [GPS_MANAGER], { conv: 'thiscall', ret: 'void' });
+  speed.call(GPS_SET, [GPS_MANAGER, best], { conv: 'thiscall', ret: 'void' });
+  movePartida(from || snap);
+  routeLast = 0;                                    // send the new route right away
+  return true;
+}
+
+function passoGps() {
+  for (let i = 0; i < GPS_STEPS && speed.mem.readU32(GPS) !== 0; i++)
+    speed.call(GPS_UPDATE, [GPS], { conv: 'thiscall', ret: 'void' });
+}
+
+// A marker of the player's own (a double click on the expanded map): the same
+// call, with an entry the mod builds. 0x529480 reads only [entry] (a record
+// with the position as integers at +0x34/+0x38/+0x3C, and +4/+8 copied along)
+// and the four kind pointers at +4..+0x10; with those null the destination id
+// is 0, a place and not an event. The page sends the street point nearest the
+// click, so the search has a road to end on.
+const ENTRY_SIZE = 0x18, PLACE_SIZE = 0x40;
+let placeEntry = 0, placeRecord = 0;
+
+// How a search ended: 0x4268A0 leaves it at GPS+8 (and +4, which a new
+// request sets to 1): 2 a route, 3 no way to the target (the search ran out),
+// 4 nothing to start from. A marker's street point can be one the GPS does
+// not reach (a dead end, a one-way stretch): then the next of the page's
+// candidates - the nearest point of the next nearest street - is tried, and
+// with the start moved onto the street whatever the distance.
+const GPS_RESULT = 0x08, GPS_PENDING = 0x04;
+const RESULT_ROUTE = 2, RESULT_NO_WAY = 3, RESULT_NO_START = 4;
+const WAYPOINT_WAIT_MS = 8000;
+let pendingPlace = null;   // { targets, i, from, since }
+
+function tentaPonto(now) {
+  const p = pendingPlace;
+  const t = p.targets[p.i];
+  marcaPonto(t.x, t.y, p.from, p.i > 0, alturaDaRua(t.street, t.idx, t.x, t.y));
+  p.since = now;
+  speed.ui.send('waypoint-target', { x: t.x, y: t.y });
+}
+
+// Only a search that ended without a way (3, 4) moves on to the next street;
+// anything else (still going, reset by the game's own requests off the
+// streets) waits, and gives up quietly after WAYPOINT_WAIT_MS. The page says
+// when a route to the marker has arrived ('waypoint-routed'): that ends it.
+function conferePonto(now) {
+  const p = pendingPlace;
+  if (!p || speed.mem.readU32(GPS) !== 0) return;       // still searching
+  const result = speed.mem.readU32(GPS + GPS_RESULT);
+  if (result === RESULT_ROUTE) { pendingPlace = null; return; }
+  if (result !== RESULT_NO_WAY && result !== RESULT_NO_START) {
+    if (now - p.since > WAYPOINT_WAIT_MS) pendingPlace = null;
+    return;
+  }
+  if (++p.i < p.targets.length) { tentaPonto(now); return; }
+  pendingPlace = null;
+  speed.ui.send('waypoint-failed');
+}
+
+// The route the car holds goes when the car is told so: its controller's
+// route method ([[car+0x2C]]+0x4C, 0x41EA30: code to +0x3E4, the route to
+// +0x3F0) with code 0 and no route, as 0x4131F0 does - but that one only
+// while a search is under way, and a finished route stayed (on the HUD too).
+const CTRL_SET_ROUTE = 0x4C;
+function limpaRotaDoCarro() {
+  const car = speed.game.car();
+  const ctrl = car ? speed.mem.readPtr(car + CAR_CONTROLLER) : 0;
+  const vt = ctrl ? speed.mem.readPtr(ctrl) : 0;
+  const fn = vt ? speed.mem.readPtr(vt + CTRL_SET_ROUTE) : 0;
+  if (fn) speed.call(fn, [ctrl, 0, 0], { conv: 'thiscall', ret: 'void' });
+}
+
+function marcaPonto(x, y, from, forceStart, z) {
+  if (!placeEntry) {
+    placeEntry = speed.mem.alloc(ENTRY_SIZE);
+    placeRecord = speed.mem.alloc(PLACE_SIZE);
+    if (!placeEntry || !placeRecord) { placeEntry = placeRecord = 0; return false; }
+  }
+  for (let i = 0; i < ENTRY_SIZE; i += 4) speed.mem.writeU32(placeEntry + i, 0);
+  for (let i = 0; i < PLACE_SIZE; i += 4) speed.mem.writeU32(placeRecord + i, 0);
+  const car = pose();
+  speed.mem.writeU32(placeEntry, placeRecord);
+  speed.mem.writeU32(placeRecord + ENTRY_POS, Math.round(x) >>> 0);
+  speed.mem.writeU32(placeRecord + ENTRY_POS + 4, Math.round(y) >>> 0);
+  // the street's own height; the car's only when it could not be read
+  const h = typeof z === 'number' ? z : car ? car.z : 0;
+  speed.mem.writeU32(placeRecord + ENTRY_POS + 8, Math.round(h) >>> 0);
+  speed.call(GPS_CLEAR, [GPS_MANAGER], { conv: 'thiscall', ret: 'void' });
+  speed.call(GPS_SET, [GPS_MANAGER, placeEntry], { conv: 'thiscall', ret: 'void' });
+  movePartida(from || snap, forceStart);
+  routeLast = 0;
+  return true;
+}
+
+speed.on('ui:waypoint', (p) => {
+  if (!p || !Array.isArray(p.targets)) return;
+  const targets = p.targets.filter((t) => t && typeof t.x === 'number' && typeof t.y === 'number');
+  // the start's street, for its height too
+  const from = p.from && typeof p.from.x === 'number' ? p.from : null;
+  if (!targets.length) return;
+  pendingPlace = { targets, i: 0, from, since: 0 };
+  tentaPonto(speed.now());
+});
+
+// a double click on the marker takes it away, and the route with it
+speed.on('ui:waypoint-clear', () => {
+  pendingPlace = null;
+  speed.call(GPS_CLEAR, [GPS_MANAGER], { conv: 'thiscall', ret: 'void' });
+  limpaRotaDoCarro();
+  routeLast = 0;
+});
+speed.on('ui:waypoint-routed', () => { pendingPlace = null; });
+
+
+speed.on('ui:gps', (p) => {
+  if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
+  marcaGps(p.x, p.y, p.from && typeof p.from.x === 'number' ? p.from : null);
+});
+
+
 // A legenda do mapa expandido liga e desliga categorias no filtro do jogo; o
 // minimapa, o mapa do jogo e o expandido seguem o mesmo filtro.
 speed.on('ui:filter', (f) => {
@@ -569,11 +844,14 @@ speed.on('ui:filter', (f) => {
 
 speed.on('ui:ready', () => {
   speed.ui.send('style', estiloIcones());
+  speed.ui.send('shape', formato());
+  speed.ui.send('edge', borda());
   paginaPronta = true;
   visivel = false;           // a pagina recarregou: manda o estado de novo
   pista = null;
   careerSent = '';
   routeSent = '';
+  pausedSent = null;
 });
 
 // A pista so muda num carregamento; conferir a cada frame seria desperdicio,
@@ -587,12 +865,15 @@ function conferePista() {
   }
   return true;
 }
-speed.on('gamestate', () => { pista = null; rastro = {}; });
+speed.on('gamestate', () => { pista = null; rastro = {}; streetPtr = null; });
 
 speed.on('frame', () => {
   if (speed.game.state() === 6) escondeMinimapaOriginal();
   if (paginaPronta) confereMapaGrande(speed.now());
   else if (Object.keys(hudPackages).length) { hudPackages = {}; atualizaBloqueio(); }
+  conferePartida();
+  if (bigOpen) passoGps();
+  if (pendingPlace) conferePonto(speed.now());
   if (!paginaPronta) return;
   const now = speed.now();
   if (now - last < RATE_MS) return;
@@ -616,67 +897,29 @@ speed.on('frame', () => {
   speed.ui.send('pose', p);
 });
 
-speed.command('minimap', (args) => {
-  if (args && args[0] === 'seta') {
-    const v = args[1] === 'esconder' ? 'esconder' : args[1] === 'mostrar' ? 'mostrar' : null;
-    if (!v) return 'minimap seta {white}esconder{/} | {white}mostrar{/}  (agora: ' + setaGps() + ')';
-    speed.store.set('gpsArrow', v);
-    return aplicaSetaGps() ? 'minimap: seta do GPS {green}' + (v === 'esconder' ? 'escondida' : 'visivel') + '{/}'
-                           : 'minimap: {red}nao consegui mexer na seta (outro mod alterou a funcao){/}';
-  }
-  if (args && args[0] === 'zoom') {
-    const v = args[1] === 'dinamico' ? 'dinamico' : args[1] === 'fixo' ? 'fixo' : null;
-    if (!v) return 'minimap zoom {white}dinamico{/} | {white}fixo{/}  (agora: ' + zoomMode() + ')';
-    speed.store.set('zoom', v);
-    return 'minimap: zoom {green}' + v + '{/}';
-  }
-  if (args && args[0] === 'giro') {
-    const v = args[1] === 'camera' ? 'camera' : args[1] === 'carro' ? 'carro' : null;
-    if (!v) return 'minimap giro {white}camera{/} | {white}carro{/}  (agora: ' + giro() + ')';
-    speed.store.set('turn', v);
-    return 'minimap: o radar gira com {green}' + v + '{/}';
-  }
-  if (args && args[0] === 'icones') {
-    const v = args[1] === 'nativo' ? 'nativo' : args[1] === 'pin' ? 'pin' : null;
-    if (!v) return 'minimap icones {white}nativo{/} | {white}pin{/}  (agora: ' + estiloIcones() + ')';
-    speed.store.set('icons', v);
-    speed.ui.send('style', v);
-    return 'minimap: icones {green}' + v + '{/}';
-  }
-  const rr = gpsRoute();
-  if (rr) {
-    console.log('minimap: rota do gps (' + rr.nodes.length + ' nos): ' +
-                rr.raw.map((v) => '0x' + v.toString(16)).join(' ') +
-                (rr.target ? '  destino ' + rr.target.x.toFixed(1) + ' ' + rr.target.y.toFixed(1) : ''));
-    // os nos como estao NA MEMORIA ([0x883DB0], 32 bytes cada), para comparar
-    // com o arquivo: +4 ponto, +6 ponto, +8 rua, +0xA rua, +0x18..+0x1E
-    const base = speed.mem.readPtr(0x883DB0), count = speed.mem.readU32(0x883DB4);
-    console.log('minimap: nos na memoria em 0x' + (base || 0).toString(16) + ', ' + count + ' nos');
-    if (base) for (const nn of rr.nodes) {
-      const n = nn.i;
-      const at = base + n * 32, w = [];
-      for (let k = 0; k < 16; k++) w.push(speed.mem.readU16(at + 2 * k));
-      console.log('minimap:   no ' + n + ': ' + w.join(' '));
-    }
-    const car = speed.game.car();
-    const pc = car ? vec3(car + (carPos === null ? 0x60 : carPos)) : null;
-    if (pc) console.log('minimap: carro em ' + pc.x.toFixed(1) + ' ' + pc.y.toFixed(1));
-  }
+// The player changed something in Options > Mods: the arrow applies at once,
+// the style goes to the page; turn and zoom are read on every pose.
+speed.on('settings', () => {
+  aplicaSetaGps();
+  if (paginaPronta) { speed.ui.send('style', estiloIcones()); speed.ui.send('shape', formato()); speed.ui.send('edge', borda()); }
+});
+
+speed.command('minimap', () => {
   const p = pose();
   const t = trackInfo();
-  if (!p || !t) return 'minimap: {gray}sem carro (fora do jogo){/}';
+  if (!p || !t) return 'minimap: {gray}no car (not in a race or free roam){/}';
   if (carPos === null) decideCarPos(p);
   const m = mapa(t, p.x, p.y);
   const tl = speed.game.telemetry();
-  return 'minimap: ' + (tl ? '{white}' + tl.kmh.toFixed(0) + '{/} km/h (zoom ' + zoomMode() + ')  ' : '{gray}sem velocidade{/}  ') +
+  return 'minimap: ' + (tl ? '{white}' + tl.kmh.toFixed(0) + '{/} km/h (zoom ' + (zoomMode() === 'fixo' ? 'fixed' : 'dynamic') + ')  ' : '{gray}no speed{/}  ') +
          'x {white}' + p.x.toFixed(1) + '{/} y {white}' + p.y.toFixed(1) +
-         '{/} z ' + p.z.toFixed(1) + '  rumo {white}' + (p.h * 180 / Math.PI).toFixed(0) +
-         '{/} graus  ->  pista {white}' + t.id + '{/} ' + t.region + ', mapa {green}' +
-         m.px.toFixed(0) + ', ' + m.py.toFixed(0) + '{/}  adversarios {white}' +
-         adversarios().length + '{/} (posicao em ' +
-         (carPos === null ? '{red}nenhum campo bateu{/}' : 'car+0x' + carPos.toString(16)) + ')' +
-         (() => { const c = careerVisible(); return c ? '  carreira: {white}' + c.races.length +
-           '{/} largadas, {white}' + c.zones.length + '{/} lojas' : '  carreira: {gray}sem tabela{/}'; })() +
-         (() => { const r = gpsRoute(); return r ? '  gps: {white}' + r.nodes.length + '{/} nos [' +
-           r.nodes.slice(0, 6).map((x) => x.i).join(' ') + (r.nodes.length > 6 ? ' ...' : '') + ']' : '  gps: {gray}sem rota{/}'; })();
-}, 'minimap [icones nativo|pin] [giro camera|carro] [zoom dinamico|fixo] [seta esconder|mostrar] - estado; ou troca uma opcao');
+         '{/} z ' + p.z.toFixed(1) + '  heading {white}' + (p.h * 180 / Math.PI).toFixed(0) +
+         '{/} deg  ->  track {white}' + t.id + '{/} ' + t.region + ', map {green}' +
+         m.px.toFixed(0) + ', ' + m.py.toFixed(0) + '{/}  rivals {white}' +
+         adversarios().length + '{/} (position at ' +
+         (carPos === null ? '{red}no field matched{/}' : 'car+0x' + carPos.toString(16)) + ')' +
+         (() => { const c = careerVisible(); return c ? '  career: {white}' + c.races.length +
+           '{/} race starts, {white}' + c.zones.length + '{/} shops' : '  career: {gray}no table{/}'; })() +
+         (() => { const r = gpsRoute(); return r ? '  gps: {white}' + r.nodes.length + '{/} nodes [' +
+           r.nodes.slice(0, 6).map((x) => x.i).join(' ') + (r.nodes.length > 6 ? ' ...' : '') + ']' : '  gps: {gray}no route{/}'; })();
+}, 'minimap - the minimap state (options are in Options > Mods)');

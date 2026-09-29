@@ -2,12 +2,12 @@
 
 What was found in SPEED2.EXE (v1.2 NTSC) and in the game's files to build the
 minimap, and why the mod does what it does. These sections started in
-SpeedLoader's `NOTES.md` and moved here with the mod; SpeedLoader keeps the
+FRSModLoader's `NOTES.md` and moved here with the mod; FRSModLoader keeps the
 parts of the platform the mod relies on (`GameTextures` and `GameData`, the
 `http://nfsu2.tex/` and `http://nfsu2.data/` hosts).
 
-A few paths below still name the mod's old place inside SpeedLoader
-(`mods/minimap/...`) or SpeedLoader's `tools/`; in this repository they are the
+A few paths below still name the mod's old place inside FRSModLoader
+(`mods/minimap/...`) or FRSModLoader's `tools/`; in this repository they are the
 repository root and `tools/`.
 
 ## The map and the race starts
@@ -347,7 +347,7 @@ or third row, each with both signs) against the car's heading while driving
 over 30 km/h with the camera behind - 0.94 for this one. The measurement was
 done once and the result is now fixed in the code, so the radar turns with the
 camera from the first frame at any speed. The player's arrow turns by the car's
-heading minus the camera's; `/minimap giro carro` goes back to turning with
+heading minus the camera's; the "Girar com: Carro" option goes back to turning with
 the car.
 
 ### The HUD's GPS arrow
@@ -360,13 +360,13 @@ the controller's route state (`ctrl+0x3E4` 1 or 2), finds a point ahead on the
 route and draws through `0x5EAC90`. Its only caller, `0x63176A`, ignores the
 result, so hiding the arrow is making the function return at once
 (`C2 04 00` over `55 8B EC`) and showing it again is putting the bytes back.
-The minimap does that on `/minimap seta esconder|mostrar`, and only if the
+The minimap does that from the "Seta azul do GPS" option, and only if the
 function starts with one of those two sequences.
 
 ### The maps straight from the pack's zip
 
 Nothing is extracted any more. The "NFSU2 Detailed Map v1" zip sits in the
-mod's root as downloaded, and SpeedLoader's `GameTextures` reads each map out
+mod's root as downloaded, and FRSModLoader's `GameTextures` reads each map out
 of it when the page asks for `mod/frsminimap/maps/TRACKMAP<id>.dds`: a loose
 file there wins, and when there is none, the zips in the mod's root are
 searched for an entry with that file name - `Default` preferred, `Beta` never
@@ -397,6 +397,12 @@ again.
 | `PAD_BACK` | FEHashUpper `911AB364`: the "back" message (Esc, the pad's B). Sent to the package with `speed.game.sendFrontendMessage`, the world map screen handles it (`0x4EF642` and others) and leaves the way it always does, resuming the game |
 | `0x5379A0` | cdecl(package name): pulls the package off (through `0x5376F0`). **Not** the way to close the map: it was the first try, and it left the screen half torn down - the map's buttons on screen and the game stuck |
 | `0x496390` | cdecl(category, off): the legend's filter setter (the getter is `0x4964D0`) |
+| `0x529480` | thiscall(`0x838590`, &entry): set the GPS destination to a map event entry, as the world map screen does (`0x4E0973`, `0x532DFD`); clears the old route and files the request through `0x413120` with the entry's integer position (`[entry]+0x34/+0x38/+0x3C`) |
+| `0x529410` | thiscall(`0x838590`, &entry) -> al: that entry is already the destination |
+| `0x4268A0` | thiscall(`0x81CBC0`): one step of the GPS search. Only the world update calls it (`0x609D27`), and that stops while the game is paused, so the mod steps it itself while the expanded map is open |
+| `0x40C440` | files a GPS request only when the GPS is idle (`+0` == 0): start x y z at `+0x10`, the car's heading at `+0x20`, target at `+0x30`, requester at `+0x17A4`, state `+0` = 1. The setup (`0x422B90`) is sliced over the road sections, index at `+0x40`; with a start off the streets it finds no road and the search ends empty ("GPS unavailable"). The mod moves the start to the street point nearest the car while the state is 1 and `+0x40` is still 0, which gives a route from a car park too |
+| `GPS+4`, `GPS+8` | how the last search ended, written when it is handed over (`0x42693E`..`0x426979`): 2 a route, 3 no way to the target (the open list ran dry), 4 nothing to start from. A request sets `+4` to 1; `0x4131F0` (the reset) zeroes both. A marker of the player's is retried on the next nearest street while the result is not 2 |
+| `0x529480` with an entry of the mod's | a player's marker: an entry whose `[0]` is a record with only the position (integers at `+0x34/+0x38/+0x3C`) and null kind pointers; the destination id comes out 0 |
 
 The legend of the expanded map writes the game's filter, so the pause map, the
 minimap and the expanded map always agree. The page draws the map top-down,
