@@ -533,6 +533,10 @@ function checkCareer(now) {
 // (The Portuguese values of development builds are still read, and rewritten at start.)
 function shapeMode() { const v = speed.settings.get('shape', 'round'); return v === 'rectangular' || v === 'retangular' ? 'rectangular' : 'round'; }
 // Its edge: 'fade' (the default, the map fades out) or 'solid'.
+// The minimap's size, in percent of its size at 1080 lines (the page scales
+// that to the screen first).
+function sizePercent() { const v = +speed.settings.get('size', 100); return v >= 50 && v <= 200 ? v : 100; }
+
 function edgeMode() { const v = speed.settings.get('edge', 'fade'); return v === 'solid' || v === 'solida' ? 'solid' : 'fade'; }
 
 function iconStyle() {
@@ -861,6 +865,7 @@ speed.on('ui:ready', () => {
   speed.ui.send('style', iconStyle());
   speed.ui.send('shape', shapeMode());
   speed.ui.send('edge', edgeMode());
+  speed.ui.send('size', sizePercent());
   pageReady = true;
   visible = false;           // the page reloaded: send the state again
   track = null;
@@ -916,7 +921,7 @@ speed.on('frame', () => {
 // the style goes to the page; turn and zoom are read on every pose.
 speed.on('settings', () => {
   applyGpsArrow();
-  if (pageReady) { speed.ui.send('style', iconStyle()); speed.ui.send('shape', shapeMode()); speed.ui.send('edge', edgeMode()); }
+  if (pageReady) { speed.ui.send('style', iconStyle()); speed.ui.send('shape', shapeMode()); speed.ui.send('edge', edgeMode()); speed.ui.send('size', sizePercent()); }
 });
 
 speed.command('minimap', () => {

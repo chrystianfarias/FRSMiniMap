@@ -29,12 +29,19 @@
                through it at the car's point */
   :host { all: initial; }
 
+  /* Sizes are written for a 1080-line screen. --ui scales them to the one the
+     game runs at (its height over 1080, set by the script), and --mm is that
+     times the player's Size option, for the minimap. The minimap is laid out
+     at 1080 size and scaled as a whole, so none of its geometry changes. */
+  :host { --ui: 1; --mm: 1; }
   .mm {
     --size: 300px;
     position: absolute;
     /* in place of the game's minimap, which main.js hides */
-    left: 36px; bottom: 36px;
+    left: calc(36px * var(--ui)); bottom: calc(36px * var(--ui));
     width: var(--size); height: var(--size);
+    transform: scale(var(--mm));
+    transform-origin: 0 100%;
     display: none;
   }
   .mm.on { display: block; }
@@ -202,11 +209,11 @@
     color: #dfe6e9;
   }
   .big.on { display: block; }
-  .bigwrap { position: absolute; inset: 5% 6%; --nfs-size: 15px; }
+  .bigwrap { position: absolute; inset: 5% 6%; --nfs-size: calc(15px * var(--ui)); }
   .bigpanel { width: 100%; height: 100%; display: flex; flex-direction: column; }
   .bigbody { flex: 1; min-height: 0; display: flex; }
   .bigsplit { flex: 1; min-height: 0; }
-  .bigside { width: 260px; flex: none; overflow: hidden; }
+  .bigside { width: calc(260px * var(--ui)); flex: none; overflow: hidden; }
   .bigview {
     position: relative; overflow: hidden; padding: 0 !important;
     background: #0d1417;
@@ -226,12 +233,14 @@
   .bigroute .route-line { stroke: #00e5ff; stroke-width: 1.5; }
   .bigpin {
     position: absolute; left: 0; top: 0;
-    width: 30px; height: 27px;          /* the pin, with the viewBox 80 x 72 margin */
-    margin: -27px 0 0 -15px;            /* the tip on the point */
+    /* the pin, with the viewBox 80 x 72 margin; the tip on the point */
+    width: calc(30px * var(--ui)); height: calc(27px * var(--ui));
+    margin: calc(-27px * var(--ui)) 0 0 calc(-15px * var(--ui));
     transform-origin: 50% 100%;
     cursor: pointer;
   }
-  .bigpin.native { width: 26px; height: 26px; margin: -13px 0 0 -13px; transform-origin: 50% 50%; }
+  .bigpin.native { width: calc(26px * var(--ui)); height: calc(26px * var(--ui));
+                   margin: calc(-13px * var(--ui)) 0 0 calc(-13px * var(--ui)); transform-origin: 50% 50%; }
   .bigpin svg { display: block; width: 100%; height: 100%; overflow: visible;
                 filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55)); }
   .bigpin .disc { fill: var(--c); }
@@ -244,7 +253,8 @@
   .bigpin .xmark { stroke: var(--c); stroke-width: 12; stroke-linecap: round; }
   .bigarrow {
     position: absolute; left: 0; top: 0;
-    width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    width: calc(26px * var(--ui)); height: calc(26px * var(--ui));
+    margin: calc(-13px * var(--ui)) 0 0 calc(-13px * var(--ui));
     transform-origin: 50% 50%;
     filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
     pointer-events: none;
@@ -255,7 +265,8 @@
   .bigarrow.rival svg path { fill: #f39c12; }
   .big.native .bigarrow.me svg path { fill: #30cf30; }
   .big.native .bigarrow.rival svg path { fill: #cf8030; }
-  .bigarrow.rival { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
+  .bigarrow.rival { width: calc(20px * var(--ui)); height: calc(20px * var(--ui));
+                    margin: calc(-10px * var(--ui)) 0 0 calc(-10px * var(--ui)); }
 
   #legend .sw { width: 1.3em; height: 1.3em; flex: none; margin-right: 0.5em; }
   #legend .sw svg { width: 100%; height: 100%; overflow: visible; }
@@ -271,19 +282,19 @@
   #legend .nfs-row.off { opacity: 0.28; }
   /* zoom in, zoom out, recentre: bottom right */
   .bigctl {
-    position: absolute; right: 14px; bottom: 12px;
-    display: flex; flex-direction: column; gap: 8px;
+    position: absolute; right: calc(14px * var(--ui)); bottom: calc(12px * var(--ui));
+    display: flex; flex-direction: column; gap: calc(8px * var(--ui));
   }
-  .bigctl .nfs-btn-round { width: 2.5em; height: 2.5em; font-size: 15px; }
+  .bigctl .nfs-btn-round { width: 2.5em; height: 2.5em; font-size: calc(15px * var(--ui)); }
   .bigctl svg { width: 1.15em; height: 1.15em; display: block; }
   .bigctl svg path, .bigctl svg circle { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
   .bigtip {
     position: absolute; left: 0; top: 0;
-    padding: 5px 9px;
+    padding: calc(5px * var(--ui)) calc(9px * var(--ui));
     background: rgba(8, 14, 17, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 5px;
-    font-size: 12px; white-space: nowrap;
+    font-size: calc(12px * var(--ui)); white-space: nowrap;
     pointer-events: none;
     display: none;
   }
@@ -1152,6 +1163,22 @@
   frsmodloader.on('hide', () => { mm.classList.remove('on'); turnNow = null; });
   frsmodloader.on('career', (c) => { career = c; placeEvents(); });
   frsmodloader.on('paused', (v) => mm.classList.toggle('paused', !!v));
+
+  // Everything is sized for 1080 lines; the game may run at 480 or at 2160.
+  // --ui follows the screen's height, --mm adds the Size option on top.
+  const REF_HEIGHT = 1080;
+  let sizeMult = 1;
+  function applyScale() {
+    const ui = Math.max(0.25, (window.innerHeight || REF_HEIGHT) / REF_HEIGHT);
+    const host = root.host || document.documentElement;
+    host.style.setProperty('--ui', ui.toFixed(4));
+    host.style.setProperty('--mm', (ui * sizeMult).toFixed(4));
+  }
+  window.addEventListener('resize', applyScale);
+  applyScale();
+  frsmodloader.on('size', (pct) => {
+    if (typeof pct === 'number' && pct > 0) { sizeMult = pct / 100; applyScale(); }
+  });
   frsmodloader.on('shape', (v) => {
     mm.classList.toggle('rect', v === 'rectangular');
     if (lastPose && track && frame) place(lastPose);

@@ -90,6 +90,7 @@ loader between sessions:
 |---|---|
 | Shape | Round (default), or Rectangular as GTA V's |
 | Edge | Infinite: the map fades out at the edges (default); or Solid, with an outline |
+| Size | 50-200 % (default 100). The minimap already follows the screen's resolution; this scales it further |
 | Icons | Pins with icons (default), or Native: the game's circles and colours |
 | Turn with | the map turns with the Camera (default) or with the Car |
 | Dynamic zoom | the zoom opens up with speed (default), or stays |

@@ -48,6 +48,17 @@
       "description": "Infinite: the map fades out at the edges. Solid: a clear border with an outline"
     },
     {
+      "id": "size",
+      "type": "range",
+      "label": "Size",
+      "min": 50,
+      "max": 200,
+      "step": 10,
+      "unit": "%",
+      "default": 100,
+      "description": "The minimap's size. It already follows the screen resolution; this scales it further"
+    },
+    {
       "id": "icons",
       "type": "choice",
       "label": "Icons",
