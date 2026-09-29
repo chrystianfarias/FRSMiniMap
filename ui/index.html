@@ -1,3 +1,4 @@
+<link rel="stylesheet" href="nfsu2.css">
 <style>
   /* FRSMiniMap - minimapa 3D. Nada do jogo e extraido: sai dos arquivos dele em
      tempo real.
@@ -160,6 +161,108 @@
     background: url(http://nfsu2.tex/MINIMAP_NORTH_INDICATOR) 0 0 / 100% 100%;
     will-change: transform;
   }
+
+  /* ---- o mapa expandido (o M) ----
+     Tela cheia por cima do mapa do jogo, que main.js deixa aberto por baixo
+     (e ele que pausa o jogo). De cima, norte para cima; arrasta, roda, teclado.
+     O mundo e uma camada de 2048 px (o mapa de 512 x 4) movida e escalada por
+     transform, com os marcadores dentro dela desescalados para ficarem do
+     mesmo tamanho a qualquer zoom. */
+  .big {
+    position: absolute; inset: 0;
+    display: none;
+    background: rgba(0, 0, 0, 0.55);   /* o jogo por tras, escurecido */
+    pointer-events: auto;
+    font: 13px "Segoe UI", Arial, sans-serif;
+    color: #dfe6e9;
+  }
+  .big.on { display: block; }
+  .bigwrap { position: absolute; inset: 5% 6%; --nfs-size: 15px; }
+  .bigpanel { width: 100%; height: 100%; display: flex; flex-direction: column; }
+  .bigbody { flex: 1; min-height: 0; display: flex; }
+  .bigsplit { flex: 1; min-height: 0; }
+  .bigside { width: 260px; flex: none; overflow: hidden; }
+  .bigview {
+    position: relative; overflow: hidden; padding: 0 !important;
+    background: #0d1417;
+    cursor: grab;
+  }
+  .bigview.drag { cursor: grabbing; }
+  .bigworld {
+    position: absolute; left: 0; top: 0;
+    width: 2048px; height: 2048px;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  .bigimg { position: absolute; inset: 0; background: 0 0 / 100% 100% no-repeat; }
+  .bigroute { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .bigroute path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+  .bigroute .route-edge { stroke: rgba(0, 0, 0, 0.55); stroke-width: 2.6; }
+  .bigroute .route-line { stroke: #00e5ff; stroke-width: 1.5; }
+  .bigpin {
+    position: absolute; left: 0; top: 0;
+    width: 30px; height: 27px;          /* o pino, com a folga do viewBox 80 x 72 */
+    margin: -27px 0 0 -15px;            /* a ponta no ponto */
+    transform-origin: 50% 100%;
+    cursor: pointer;
+  }
+  .bigpin.native { width: 26px; height: 26px; margin: -13px 0 0 -13px; transform-origin: 50% 50%; }
+  .bigpin svg { display: block; width: 100%; height: 100%; overflow: visible;
+                filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55)); }
+  .bigpin .disc { fill: var(--c); }
+  .bigpin .icon, .bigpin .icon path { fill: #fff; }
+  .bigpin .body { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; stroke-linejoin: round; }
+  .bigpin .ringedge { fill: none; stroke: rgba(6, 10, 12, 0.7); stroke-width: 19; }
+  .bigpin .ring { fill: rgba(0, 0, 0, 0.35); stroke: var(--c); stroke-width: 11; }
+  .bigpin .dot { fill: var(--c); stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; }
+  .bigpin .xedge { stroke: rgba(6, 10, 12, 0.7); stroke-width: 20; stroke-linecap: round; }
+  .bigpin .xmark { stroke: var(--c); stroke-width: 12; stroke-linecap: round; }
+  .bigarrow {
+    position: absolute; left: 0; top: 0;
+    width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    transform-origin: 50% 50%;
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+    pointer-events: none;
+  }
+  .bigarrow svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .bigarrow svg path { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; stroke-linejoin: round; }
+  .bigarrow.me svg path { fill: #2ecc71; }
+  .bigarrow.rival svg path { fill: #f39c12; }
+  .big.native .bigarrow.me svg path { fill: #30cf30; }
+  .big.native .bigarrow.rival svg path { fill: #cf8030; }
+  .bigarrow.rival { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
+
+  #legend .sw { width: 1.3em; height: 1.3em; flex: none; margin-right: 0.5em; }
+  #legend .sw svg { width: 100%; height: 100%; overflow: visible; }
+  #legend .sw .disc { fill: var(--c); }
+  #legend .sw .icon, #legend .sw .icon path { fill: #fff; }
+  #legend .sw .ring { fill: rgba(0, 0, 0, 0.35); stroke: var(--c); stroke-width: 11; }
+  #legend .sw .ringedge { fill: none; stroke: rgba(6, 10, 12, 0.7); stroke-width: 19; }
+  #legend .sw .dot { fill: var(--c); stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; }
+  #legend .sw .body { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; }
+  #legend .sw .xedge { stroke: rgba(6, 10, 12, 0.7); stroke-width: 20; stroke-linecap: round; }
+  #legend .sw .xmark { stroke: var(--c); stroke-width: 12; stroke-linecap: round; }
+  #legend .sw.arrow svg path { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; }
+  #legend .nfs-row.off { opacity: 0.4; }
+  .bighelp {
+    position: absolute; left: 14px; bottom: 12px;
+    padding: 7px 12px;
+    background: rgba(8, 14, 17, 0.75);
+    border-radius: 6px;
+    color: #9fb0b5; font-size: 12px;
+    cursor: default;
+  }
+  .bighelp b { color: #dfe6e9; font-weight: 600; }
+  .bigtip {
+    position: absolute; left: 0; top: 0;
+    padding: 5px 9px;
+    background: rgba(8, 14, 17, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    font-size: 12px; white-space: nowrap;
+    pointer-events: none;
+    display: none;
+  }
 </style>
 
 <div class="mm" id="mm">
@@ -176,6 +279,38 @@
   <div class="flat" id="flat"></div>
   <div class="car"></div>
   <div class="north" id="north"></div>
+</div>
+
+<div class="big" id="big">
+  <div class="nfs bigwrap">
+    <div class="nfs-panel bigpanel">
+      <div class="nfs-panel__head">
+        <h1 class="nfs-title">Mapa</h1>
+        <div class="nfs-subtitle" style="flex:1">Mapa completo</div>
+      </div>
+      <div class="nfs-panel__body bigbody">
+        <div class="nfs-split bigsplit">
+          <div class="nfs-split__side bigside">
+            <ul class="nfs-list" id="legend"></ul>
+          </div>
+          <div class="nfs-split__main bigview" id="bigview">
+            <div class="bigworld" id="bigworld">
+              <div class="bigimg"></div>
+              <svg class="bigroute" viewBox="0 0 512 512"><path class="route-edge"/><path class="route-line"/></svg>
+              <div id="bigpins"></div>
+            </div>
+            <div class="bighelp"><b>Arrastar</b> move &nbsp; <b>Roda</b> zoom &nbsp; <b>WASD</b> move &nbsp;
+              <b>Q E</b> zoom &nbsp; <b>C</b> centraliza</div>
+            <div class="bigtip" id="bigtip"></div>
+          </div>
+        </div>
+      </div>
+      <div class="nfs-panel__foot">
+        <button class="nfs-btn" id="bigback">Voltar</button>
+        <button class="nfs-btn" id="bigcenter">Centralizar</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -369,7 +504,10 @@
     placeEvents();
   }
 
-  function addPin(x, y, colour, icon, title, cat) {
+  const KIND_NAME = { CIRCUIT: 'Circuito', DRAG: 'Drag', STREET: 'Street X', DRIFT: 'Drift', SPRINT: 'Sprint',
+    URL: 'URL', SUV: 'SUV', PAINT: 'Pintura', BODY: 'Body', PERFORMANCE: 'Performance',
+    CARLOT: 'Concessionaria', SPECIALTY: 'Acessorios', GARAGE: 'Garagem' };
+  function addPin(x, y, colour, icon, title, cat, kind, label) {
     const el = document.createElement('div');
     el.className = 'ev';
     el.innerHTML = markup(icon);
@@ -378,7 +516,7 @@
     const isFlat = iconStyle === 'nativo';
     (isFlat ? flat : plane).appendChild(el);
     const { gx, gy } = toGround(x, y);
-    events.push({ el, gx, gy, wx: x, wy: y, colour, icon, cat, flat: isFlat });
+    events.push({ el, gx, gy, wx: x, wy: y, colour, icon, cat, flat: isFlat, kind, label: label || title });
   }
 
   // Com uma rota do GPS, so o destino dela fica: o pino mais perto do alvo
@@ -516,19 +654,23 @@
         if (seen.has(key)) continue;
         seen.add(key);
         addPin(ev.x, ev.y, colourOf(k), icon, r.name || k,
-               'race:' + (c.special ? 'SPECIAL' : k));
+               'race:' + (c.special ? 'SPECIAL' : k), k,
+               (c.special ? 'Especial - ' : '') + KIND_NAME[k] + (r.name ? '  (' + r.name + ')' : ''));
       }
     } else {
       for (const ev of starts) {
         const k = kindOf(ev);
         addPin(ev.x, ev.y, colourOf(k), 'RACE',
-               ev.races.map((x) => x.name || x.kind).join(', '), 'race:' + k);
+               ev.races.map((x) => x.name || x.kind).join(', '), 'race:' + k, k,
+               KIND_NAME[k] + '  (' + ev.races.map((x) => x.name || x.kind).join(', ') + ')');
       }
     }
     for (const sh of shops)
       if (!zone || zone.has(sh.zone))
-        addPin(sh.x, sh.y, colourOf(sh.kind), sh.kind, sh.name, 'shop:' + sh.kind);
+        addPin(sh.x, sh.y, colourOf(sh.kind), sh.kind, sh.name, 'shop:' + sh.kind, sh.kind,
+               KIND_NAME[sh.kind] + '  (' + sh.name + ')');
     applyFocus();
+    if (bigOn) buildBigMarkers();
   }
 
   // O mapa da pista: o redesenhado que vai com o mod, se houver um para ela,
@@ -864,6 +1006,7 @@
     const dash = cut > 0 ? T + ' ' + T : 'none', off = cut > 0 ? (-cut).toFixed(2) : '0';
     for (const el of [line, edge]) { el.style.strokeDasharray = dash; el.style.strokeDashoffset = off; }
     routeCut = cut;
+    if (bigOn) copyRoute();
   }
   function trimRoute(p) {
     const n = routeWorld.length / 2;
@@ -902,6 +1045,261 @@
     placeEvents();
   });
 
+
+
+  // ---- o mapa expandido (o M) ----
+  // main.js manda 'bigmap' true quando o mapa do jogo abre (ele pausa o jogo)
+  // e a pagina recebe teclado e mouse; fechar aqui (Esc, M) pede 'bigmap-close'.
+  // Camera em pixels do TRACKMAP (0..512) e zoom em pixels de tela por pixel
+  // do mapa; o alvo e perseguido a cada quadro (requestAnimationFrame), o que
+  // da o arrasto com inercia e o zoom suave.
+  const big = root.getElementById('big');
+  const bigView = root.getElementById('bigview');
+  const bigWorld = root.getElementById('bigworld');
+  const bigImg = root.querySelector('.bigimg');
+  const bigPins = root.getElementById('bigpins');
+  const bigTip = root.getElementById('bigtip');
+  const legendEl = root.getElementById('legend');
+  const bigLine = root.querySelector('.bigroute .route-line');
+  const bigEdge = root.querySelector('.bigroute .route-edge');
+  const WORLD = 2048 / 512;          // pixels da camada por pixel do mapa
+  const Z_MAX = 14, CAM_EASE = 0.22, INERTIA = 0.9, WHEEL_STEP = 1.18, KEY_PAN = 9, KEY_ZOOM = 1.035;
+  const LEGEND_RACES = [['CIRCUIT', 'Circuito', 0], ['DRAG', 'Drag', 1], ['STREET', 'Street X', 2],
+    ['DRIFT', 'Drift', 3], ['SPRINT', 'Sprint', 4], ['URL', 'URL', 5], ['SUV', 'SUV', 6]];
+  const LEGEND_SHOPS = [['PAINT', 'Pintura', 7], ['BODY', 'Body', 8], ['PERFORMANCE', 'Performance', 9],
+    ['CARLOT', 'Concessionaria', 10], ['SPECIALTY', 'Acessorios', 11], ['GARAGE', 'Garagem', 12]];
+  let bigOn = false, bigRaf = 0, bigZoomShown = -1;
+  const cam = { x: 256, y: 256, z: 2 }, tcam = { x: 256, y: 256, z: 2 }, vel = { x: 0, y: 0 };
+  const keys = new Set();
+  let dragging = null, bigMarkers = [], meEl = null, rivalEls = [];
+
+  const zMin = () => Math.min(bigView.clientWidth, bigView.clientHeight) / 512 * 0.9;
+  const clampZ = (z) => Math.min(Z_MAX, Math.max(zMin(), z));
+  function toMap(x, y) {
+    return { mx: (x - frame.ulx) / frame.width * 512, my: (frame.uly - y) / frame.width * 512 };
+  }
+  // tela -> mapa, pela camera atual
+  function screenToMap(sx, sy) {
+    return { x: cam.x + (sx - bigView.clientWidth / 2) / cam.z, y: cam.y + (sy - bigView.clientHeight / 2) / cam.z };
+  }
+
+  function buildBigMarkers() {
+    bigPins.textContent = '';
+    bigMarkers = [];
+    if (!frame) return;
+    for (const e of events) {
+      const el = document.createElement('div');
+      el.className = 'bigpin' + (iconStyle === 'nativo' ? ' native' : '');
+      el.innerHTML = markup(e.icon);
+      el.style.setProperty('--c', e.colour);
+      const { mx, my } = toMap(e.wx, e.wy);
+      el.style.left = (mx * WORLD) + 'px';
+      el.style.top = (my * WORLD) + 'px';
+      el.dataset.tip = e.label;
+      bigPins.appendChild(el);
+      bigMarkers.push(el);
+    }
+    meEl = document.createElement('div');
+    meEl.className = 'bigarrow me';
+    meEl.innerHTML = arrowSvg;
+    bigPins.appendChild(meEl);
+    rivalEls = [];
+    bigZoomShown = -1;
+    buildLegend();
+  }
+
+  function buildLegend() {
+    const count = {};
+    for (const e of events) count[e.kind] = (count[e.kind] || 0) + 1;
+    const off = career && career.off ? career.off : [];
+    const swatch = (colour, html, extra) => '<span class="sw' + (extra || '') + '" style="--c:' + colour + '">' + html + '</span>';
+    const row = ([kind, name, cat], icon) => {
+      const hidden = !!off[cat];
+      return '<li class="nfs-row nfs-row--clickable' + (hidden ? ' off' : ' nfs-row--on') + '" data-cat="' + cat +
+        '" data-on="' + (hidden ? 0 : 1) + '"><span class="nfs-check' + (hidden ? ' nfs-check--off' : '') + '">' +
+        (hidden ? '' : '&#10003;') + '</span>' + swatch(colourOf(kind), markup(icon)) +
+        '<span class="nfs-row__label">' + name + '</span><span class="nfs-row__value">' + (hidden ? '-' : (count[kind] || 0)) + '</span></li>';
+    };
+    const me = iconStyle === 'nativo' ? '#30cf30' : '#2ecc71', rv = iconStyle === 'nativo' ? '#cf8030' : '#f39c12';
+    const arrow = (c) => arrowSvg.replace('<path', '<path fill="' + c + '"').replace('fill="white"', '');
+    legendEl.innerHTML =
+      '<li class="nfs-row nfs-row--head">' + swatch(me, arrow(me), ' arrow') + '<span class="nfs-row__label">Seu carro</span></li>' +
+      '<li class="nfs-row nfs-row--head">' + swatch(rv, arrow(rv), ' arrow') + '<span class="nfs-row__label">Adversario</span></li>' +
+      '<li class="nfs-row nfs-row--head"><span class="nfs-row__label">Corridas</span></li>' +
+      LEGEND_RACES.map((r) => row(r, 'RACE')).join('') +
+      '<li class="nfs-row">' + swatch('#dfe6e9', markup('SPECIAL')) + '<span class="nfs-row__label">Evento especial</span></li>' +
+      '<li class="nfs-row nfs-row--head"><span class="nfs-row__label">Lojas</span></li>' +
+      LEGEND_SHOPS.map((r) => row(r, r[0])).join('');
+  }
+  legendEl.addEventListener('click', (ev) => {
+    const r = ev.target.closest('[data-cat]');
+    if (!r) return;
+    speedloader.send('filter', { cat: +r.dataset.cat, on: r.dataset.on !== '1' });
+    ev.stopPropagation();
+  });
+  legendEl.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+
+  function copyRoute() {
+    const line = root.querySelector('.route-line');
+    for (const [src, dst] of [[line, bigLine], [root.querySelector('.route-edge'), bigEdge]]) {
+      dst.setAttribute('d', src.getAttribute('d') || '');
+      dst.style.strokeDasharray = src.style.strokeDasharray;
+      dst.style.strokeDashoffset = src.style.strokeDashoffset;
+    }
+  }
+
+  function centerOnPlayer(z) {
+    if (!lastPose || !frame) return;
+    const { mx, my } = toMap(lastPose.x, lastPose.y);
+    tcam.x = mx; tcam.y = my;
+    if (z) tcam.z = clampZ(z);
+  }
+
+  function openBig() {
+    bigOn = true;
+    big.classList.add('on');
+    big.classList.toggle('native', iconStyle === 'nativo');
+    mm.style.visibility = 'hidden';
+    bigImg.style.backgroundImage = bitmap.style.backgroundImage;
+    buildBigMarkers();
+    copyRoute();
+    centerOnPlayer(Math.min(bigView.clientWidth, bigView.clientHeight) / 512 * 2.4);
+    Object.assign(cam, tcam);
+    vel.x = vel.y = 0;
+    keys.clear();
+    if (!bigRaf) bigRaf = requestAnimationFrame(bigFrame);
+  }
+  function closeBig() {
+    bigOn = false;
+    big.classList.remove('on');
+    mm.style.visibility = '';
+    bigTip.style.display = 'none';
+    dragging = null;
+  }
+
+  function bigFrame() {
+    bigRaf = 0;
+    if (!bigOn) return;
+    // teclado: pan continuo enquanto a tecla esta apertada, zoom idem
+    const pan = KEY_PAN / cam.z;
+    if (keys.has('arrowleft') || keys.has('a')) tcam.x -= pan;
+    if (keys.has('arrowright') || keys.has('d')) tcam.x += pan;
+    if (keys.has('arrowup') || keys.has('w')) tcam.y -= pan;
+    if (keys.has('arrowdown') || keys.has('s')) tcam.y += pan;
+    if (keys.has('+') || keys.has('=') || keys.has('e')) tcam.z = clampZ(tcam.z * KEY_ZOOM);
+    if (keys.has('-') || keys.has('q')) tcam.z = clampZ(tcam.z / KEY_ZOOM);
+    // inercia do arrasto
+    if (!dragging) {
+      tcam.x += vel.x; tcam.y += vel.y;
+      vel.x *= INERTIA; vel.y *= INERTIA;
+    }
+    tcam.x = Math.min(560, Math.max(-48, tcam.x));
+    tcam.y = Math.min(560, Math.max(-48, tcam.y));
+    cam.x += (tcam.x - cam.x) * CAM_EASE;
+    cam.y += (tcam.y - cam.y) * CAM_EASE;
+    cam.z += (tcam.z - cam.z) * CAM_EASE;
+    const k = cam.z / WORLD;
+    bigWorld.style.transform = 'translate(' + (bigView.clientWidth / 2 - cam.x * cam.z).toFixed(2) + 'px,' +
+      (bigView.clientHeight / 2 - cam.y * cam.z).toFixed(2) + 'px) scale(' + k.toFixed(5) + ')';
+    // os marcadores ficam do mesmo tamanho: so reescritos quando o zoom anda
+    if (Math.abs(k - bigZoomShown) > 1e-4) {
+      bigZoomShown = k;
+      const inv = 'scale(' + (1 / k).toFixed(5) + ')';
+      for (const el of bigMarkers) el.style.transform = inv;
+      bigLine.style.strokeWidth = (1.5 * Math.max(1, 3 / cam.z)).toFixed(3);
+      bigEdge.style.strokeWidth = (2.6 * Math.max(1, 3 / cam.z)).toFixed(3);
+    }
+    // jogador e adversarios, norte para cima: o rumo h (0 = leste) vira 90 - h
+    if (lastPose && frame && meEl) {
+      const { mx, my } = toMap(lastPose.x, lastPose.y);
+      meEl.style.transform = 'translate(' + (mx * WORLD) + 'px,' + (my * WORLD) + 'px) scale(' + (1 / k).toFixed(5) +
+        ') rotate(' + (90 - lastPose.h * 180 / Math.PI).toFixed(1) + 'deg)';
+      const rv = lastPose.rivals || [];
+      while (rivalEls.length < rv.length) {
+        const el = document.createElement('div');
+        el.className = 'bigarrow rival';
+        el.innerHTML = arrowSvg;
+        bigPins.appendChild(el);
+        rivalEls.push(el);
+      }
+      rivalEls.forEach((el, i) => {
+        if (i >= rv.length) { el.style.display = 'none'; return; }
+        const q = toMap(rv[i].x, rv[i].y);
+        el.style.display = '';
+        el.style.transform = 'translate(' + (q.mx * WORLD) + 'px,' + (q.my * WORLD) + 'px) scale(' + (1 / k).toFixed(5) +
+          ') rotate(' + (90 - rv[i].h * 180 / Math.PI).toFixed(1) + 'deg)';
+      });
+    }
+    bigRaf = requestAnimationFrame(bigFrame);
+  }
+
+  // mouse: arrastar (com inercia ao soltar), roda (zoom para o cursor),
+  // duplo clique (aproxima ali)
+  bigView.addEventListener('pointerdown', (ev) => {
+    dragging = { x: ev.clientX, y: ev.clientY, t: performance.now() };
+    vel.x = vel.y = 0;
+    bigView.classList.add('drag');
+    bigView.setPointerCapture(ev.pointerId);
+  });
+  bigView.addEventListener('pointermove', (ev) => {
+    if (dragging) {
+      const dx = (ev.clientX - dragging.x) / cam.z, dy = (ev.clientY - dragging.y) / cam.z;
+      tcam.x -= dx; tcam.y -= dy;
+      cam.x -= dx; cam.y -= dy;          // o mapa segue a mao sem atraso
+      const now = performance.now(), dt = Math.max(1, now - dragging.t);
+      vel.x = -dx * 16 / dt; vel.y = -dy * 16 / dt;
+      dragging.x = ev.clientX; dragging.y = ev.clientY; dragging.t = now;
+      bigTip.style.display = 'none';
+      return;
+    }
+    const pin = ev.target.closest && ev.target.closest('.bigpin');
+    if (pin && pin.dataset.tip) {
+      bigTip.textContent = pin.dataset.tip;
+      bigTip.style.display = 'block';
+      const r = bigView.getBoundingClientRect();
+      bigTip.style.transform = 'translate(' + (ev.clientX - r.left + 14) + 'px,' + (ev.clientY - r.top + 12) + 'px)';
+    } else bigTip.style.display = 'none';
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    if (performance.now() - dragging.t > 80) vel.x = vel.y = 0;   // soltou parado: sem inercia
+    dragging = null;
+    bigView.classList.remove('drag');
+  };
+  bigView.addEventListener('pointerup', endDrag);
+  bigView.addEventListener('pointercancel', endDrag);
+  bigView.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const r = bigView.getBoundingClientRect();
+    const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+    const f = ev.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
+    const nz = clampZ(tcam.z * f);
+    // o ponto sob o cursor fica sob o cursor: o alvo anda na direcao dele
+    const px = tcam.x + (sx - bigView.clientWidth / 2) / tcam.z, py = tcam.y + (sy - bigView.clientHeight / 2) / tcam.z;
+    tcam.x = px - (sx - bigView.clientWidth / 2) / nz;
+    tcam.y = py - (sy - bigView.clientHeight / 2) / nz;
+    tcam.z = nz;
+  }, { passive: false });
+  bigView.addEventListener('dblclick', (ev) => {
+    const r = bigView.getBoundingClientRect();
+    const p = screenToMap(ev.clientX - r.left, ev.clientY - r.top);
+    tcam.x = p.x; tcam.y = p.y; tcam.z = clampZ(tcam.z * 2);
+  });
+  window.addEventListener('keydown', (ev) => {
+    if (!bigOn) return;
+    const k = ev.key.toLowerCase();
+    if (k === 'escape' || k === 'm') { speedloader.send('bigmap-close'); ev.preventDefault(); return; }
+    if (k === 'c' || k === ' ') { centerOnPlayer(); ev.preventDefault(); return; }
+    keys.add(k);
+    ev.preventDefault();
+  });
+  window.addEventListener('keyup', (ev) => keys.delete(ev.key.toLowerCase()));
+
+  root.getElementById('bigback').addEventListener('click', () => speedloader.send('bigmap-close'));
+  root.getElementById('bigcenter').addEventListener('click', () => centerOnPlayer());
+  for (const b of [root.getElementById('bigback'), root.getElementById('bigcenter')])
+    b.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+  speedloader.on('bigmap', (on) => { if (on) openBig(); else closeBig(); });
 
   speedloader.send('ready');
 </script>

@@ -28,6 +28,9 @@ legend's filters, the GPS route, the other racers.
   colours.
 - **Hides the stock minimap**, and nothing else of the HUD; optionally, also
   the blue GPS arrow that floats ahead of the car.
+- **An expanded map on M**, in place of the game's: full screen, drag to pan
+  with inertia, wheel to zoom towards the cursor, keyboard too, and a legend
+  that turns each kind on and off in the game's own filter.
 
 ## Requirements
 
@@ -65,6 +68,10 @@ changes the options, which are kept between sessions:
 | `/minimap giro camera \| carro` | the map turns with the camera (default) or with the car |
 | `/minimap zoom dinamico \| fixo` | zoom opens with speed (default), or stays |
 | `/minimap seta esconder \| mostrar` | hide (default) or show the HUD's blue GPS arrow |
+
+On the expanded map (M): drag to pan, wheel or Q/E to zoom, WASD or the arrows
+to move, C to centre on the car, a double click to zoom in there, a click on a
+legend row to show or hide that kind, Esc or M to close.
 
 ## Layout
 

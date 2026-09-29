@@ -377,3 +377,25 @@ decoding of the same entries: 4000 (Default variant) and 4603 (no variants)
 come out equal to rounding, and 4000 is further from the Beta variant than
 from the Default one. With no zip, the page gets a 404 and falls back to the
 game's own TRACKMAP.
+
+### The expanded map (M)
+
+`M` in free roam goes through the player's action handler `0x606730`
+(thiscall, `switch` on the action): its world-map case (`0x606895`) checks the
+gameflow and pushes `UI_InGame_WorldMap.fng` with `0x555E80`. The pause menu's
+map opens the same package. The mod does not patch that: the game's own map is
+what pauses the game and owns the screen, so it is left to open, and the mod
+opens its expanded map on top, full screen, with keyboard and mouse captured
+for the page. Closing ours closes the game's too, and the game goes on.
+
+| | |
+|---|---|
+| `0x52CF60` | cdecl(package name) -> al: the package is open |
+| `0x5379A0` | cdecl(package name): closes it (through `0x5376F0` on `[0x8384C4]`) |
+| `0x496390` | cdecl(category, off): the legend's filter setter (the getter is `0x4964D0`) |
+
+The legend of the expanded map writes the game's filter, so the pause map, the
+minimap and the expanded map always agree. The page draws the map top-down,
+north up, from the same TRACKMAP, route and markers as the minimap; the camera
+chases its target every animation frame (drag with inertia, wheel zoom towards
+the cursor, WASD/arrows, Q/E, C to centre, Esc/M to close).

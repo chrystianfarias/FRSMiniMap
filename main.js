@@ -475,7 +475,10 @@ function careerVisible() {
     else if (shop) zones[hex(speed.mem.readU32(shop + SHOP_ZONE))] = true;
   }
   races.sort((x, y) => (x.trigger + x.track < y.trigger + y.track ? -1 : 1));
-  return { races, zones: Object.keys(zones).sort() };
+  // o estado de cada categoria da legenda, para a do mapa expandido
+  const off = [];
+  for (let c = 0; c <= 13; c++) off.push((speed.call(CATEGORY_OFF, [c], { ret: 'int' }) & 0xFF) !== 0);
+  return { races, zones: Object.keys(zones).sort(), off };
 }
 
 function confereCarreira(now) {
@@ -495,6 +498,59 @@ function estiloIcones() {
   const v = speed.store.get('icons', 'pin');
   return v === 'nativo' ? 'nativo' : 'pin';
 }
+
+// ---- o mapa expandido ----
+// O M (e o "Mapa" do pause) abre o mapa do jogo, UI_InGame_WorldMap.fng, e e
+// ele que pausa o jogo e cuida da tela. O mod deixa isso acontecer e abre o
+// seu por cima, em tela cheia, com teclado e mouse na pagina; ao fechar o seu,
+// fecha o do jogo tambem, e o jogo segue.
+//   0x52CF60  cdecl(pacote) -> al: o pacote esta aberto
+//   0x5379A0  cdecl(pacote): fecha o pacote
+//   0x496390  cdecl(categoria, desligada): o filtro da legenda (o setter do
+//             0x4964D0), para a legenda do mapa expandido mexer no do jogo
+const WORLD_MAP_PKG = 'UI_InGame_WorldMap.fng';
+const FE_PACKAGE_OPEN = 0x52CF60;
+const FE_PACKAGE_CLOSE = 0x5379A0;
+const CATEGORY_SET = 0x496390;
+const BIG_MS = 100;
+let bigOpen = false, bigLast = 0;
+
+function mapaDoJogoAberto() {
+  return (speed.call(FE_PACKAGE_OPEN, [WORLD_MAP_PKG], { ret: 'int' }) & 0xFF) !== 0;
+}
+
+function abreMapa() {
+  bigOpen = true;
+  speed.ui.capture(true);
+  speed.ui.send('bigmap', true);
+}
+
+function fechaMapa(fechaODoJogo) {
+  if (!bigOpen) return;
+  bigOpen = false;
+  speed.ui.capture(false);
+  speed.ui.send('bigmap', false);
+  if (fechaODoJogo && mapaDoJogoAberto()) speed.call(FE_PACKAGE_CLOSE, [WORLD_MAP_PKG], { ret: 'void' });
+}
+
+function confereMapaGrande(now) {
+  if (now - bigLast < BIG_MS) return;
+  bigLast = now;
+  const aberto = speed.game.state() === 6 && mapaDoJogoAberto();
+  if (aberto && !bigOpen) abreMapa();
+  else if (!aberto && bigOpen) fechaMapa(false);   // o do jogo fechou por conta propria
+}
+
+speed.on('ui:bigmap-close', () => fechaMapa(true));
+
+// A legenda do mapa expandido liga e desliga categorias no filtro do jogo; o
+// minimapa, o mapa do jogo e o expandido seguem o mesmo filtro.
+speed.on('ui:filter', (f) => {
+  if (!f || typeof f.cat !== 'number' || f.cat < 0 || f.cat > 13) return;
+  speed.call(CATEGORY_SET, [f.cat, f.on ? 0 : 1], { ret: 'void' });
+  careerLast = 0;                                   // atualiza na proxima volta
+  careerSent = '';
+});
 
 speed.on('ui:ready', () => {
   speed.ui.send('style', estiloIcones());
@@ -520,6 +576,7 @@ speed.on('gamestate', () => { pista = null; rastro = {}; });
 
 speed.on('frame', () => {
   if (speed.game.state() === 6) escondeMinimapaOriginal();
+  if (paginaPronta) confereMapaGrande(speed.now());
   else if (Object.keys(hudPackages).length) { hudPackages = {}; atualizaBloqueio(); }
   if (!paginaPronta) return;
   const now = speed.now();
