@@ -36,24 +36,9 @@ legend's filters, the GPS route, the other racers.
 
 ## Requirements
 
-> **FRSModLoader 0.1.2 or later is required.** FRSMiniMap is a mod *for* the loader, not a
-> standalone `.asi`: without FRSModLoader installed in the game it does
-> nothing at all. Install the loader first.
-
-- **NFS Underground 2** v1.2 NTSC (`SPEED2.EXE`).
-- **[FRSModLoader](https://github.com/chrystianfarias/FRSModLoader) 0.1.2 or
-  later**: the minimap reads the game's textures and data through the loader
-  (`http://nfsu2.tex/`, `http://nfsu2.data/`), and its options live in the
-  loader's Options > Mods menu. The loader's release is dropped into the
-  folder with `SPEED2.EXE` (it brings its own `dinput8.dll`, Ultimate ASI
-  Loader); check that `scripts\FRSModLoader.asi` and the
-  `scripts\FRSModLoader\` folder are there before going on.
-- Optional, for the sharp maps: the **"NFSU2 Detailed Map v1"** pack by
-  JeansBig, **the zip as downloaded**. Nothing is extracted and nothing of it
-  goes into the game's files: the loader reads each map out of the zip when
-  the minimap asks for it (entries compressed with LZMA, as 7-Zip writes
-  them; the `Default` variant, never `Beta`). Without it the game's own maps
-  are used (512 px).
+- **[FRSModLoader](https://github.com/chrystianfarias/FRSModLoader) >= 0.1.2** (required).
+- Optional: the **"NFSU2 Detailed Map v1"** zip by JeansBig, as downloaded,
+  for sharper maps (the mod reads it without extracting it).
 
 ## Install
 
@@ -141,7 +126,7 @@ release.ps1           packs a release zip into release/ (not in git)
 
 You may use, modify and redistribute this, including your own forks and
 derivative mods, as long as you credit Chrystian Farias and link back to
-<https://github.com/chrystianfarias/FRSModLoader>, and as long as it is not for
+<https://github.com/chrystianfarias/FRSMiniMap>, and as long as it is not for
 commercial purposes. For a commercial license, ask:
 <https://buymeacoffee.com/chrystianfarias>. See [LICENSE](LICENSE).
 

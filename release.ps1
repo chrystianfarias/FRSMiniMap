@@ -45,6 +45,7 @@ Copy-Item (Join-Path $root "LICENSE") (Join-Path $stage "LICENSE.txt")
 @"
 FRSMiniMap $version
 A 3D minimap and an expanded map for Need for Speed Underground 2 (v1.2 NTSC).
+https://github.com/chrystianfarias/FRSMiniMap
 
 REQUIRES FRSModLoader 0.1.2 or later:
   https://github.com/chrystianfarias/FRSModLoader

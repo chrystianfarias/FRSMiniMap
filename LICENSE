@@ -9,7 +9,7 @@ Summary:        https://creativecommons.org/licenses/by-nc/4.0/
 
 You may use, modify and redistribute this, including your own forks and
 derivative mods, as long as you credit Chrystian Farias and link back to
-https://github.com/chrystianfarias/FRSModLoader, and as long as it is not for
+https://github.com/chrystianfarias/FRSMiniMap, and as long as it is not for
 commercial purposes. For a commercial license, ask:
 https://buymeacoffee.com/chrystianfarias
 
@@ -23,11 +23,11 @@ WHAT YOU MAY DO
 UNDER TWO CONDITIONS
 
   1. Attribution. You must give appropriate credit to Chrystian Farias,
-     link back to https://github.com/chrystianfarias/FRSModLoader, and
+     link back to https://github.com/chrystianfarias/FRSMiniMap, and
      indicate if changes were made. A credit line such as:
 
          Based on FRSMiniMap by Chrystian Farias
-         https://github.com/chrystianfarias/FRSModLoader
+         https://github.com/chrystianfarias/FRSMiniMap
 
      in the README, the mod description or the video description, is
      enough. You may not suggest that the author endorses you or your use
