@@ -183,15 +183,14 @@ NOTES.md              what was found in the game, and why the mod does what it d
 release.ps1           packs a release zip into release/ (not in git)
 ```
 
-## License
+## Terms of use
 
-**CC BY-NC 4.0** - Copyright (c) 2025 Chrystian Farias.
+Copyright (c) 2025 Chrystian Farias. Full terms in [LICENSE](LICENSE).
 
-You may use, modify and redistribute this, including your own forks and
-derivative mods, as long as you credit Chrystian Farias and link back to
-<https://github.com/chrystianfarias/FRSMiniMap>, and as long as it is not for
-commercial purposes. For a commercial license, ask:
-<https://buymeacoffee.com/chrystianfarias>. See [LICENSE](LICENSE).
+You may use, modify and redistribute this for free, including your own forks
+and derivative mods, as long as you **credit Chrystian Farias** and link back
+to <https://github.com/chrystianfarias/FRSMiniMap>. **Selling it is not
+allowed**, in whole or in part.
 
 If the mod helps you, you can [buy me a coffee](https://buymeacoffee.com/chrystianfarias).
 

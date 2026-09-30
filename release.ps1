@@ -85,7 +85,8 @@ UNINSTALL
 
 LICENSE
 
-  CC BY-NC 4.0 - Copyright (c) 2025 Chrystian Farias. See LICENSE.txt.
+  Copyright (c) 2025 Chrystian Farias. See LICENSE.txt for the terms of use.
+  Free to redistribute with credit. Selling it is not allowed.
   The themes' map layers are built from "NFSU2 Detailed Map" by JeansBig.
   If the mod helps you: https://buymeacoffee.com/chrystianfarias
 "@ | Set-Content (Join-Path $stage "INSTALL.txt") -Encoding UTF8
