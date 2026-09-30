@@ -45,10 +45,6 @@ foreach ($z in $zips) {
     $there = Join-Path $dest $z.Name
     if (-not (Test-Path $there) -or (Get-Item $there).Length -ne $z.Length) { Copy-Item $z.FullName $dest -Force }
 }
-if ($zips.Count -eq 0) {
-    "[..] no zip next to mod.json - the minimap will use the game's own maps (512 px)."
-    "     For the redrawn ones, put the `"NFSU2 Detailed Map v1`" zip in the mod's root."
-}
 
 # the mod's first home was mods\minimap, installed by FRSModLoader; two copies
 # would both hide the stock minimap and patch the same functions

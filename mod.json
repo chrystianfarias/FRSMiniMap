@@ -40,7 +40,7 @@
           "image": "legend/theme-waze.png"
         }
       ],
-      "description": "The map's colours and markers. Original is the Detailed Map's own picture; the other themes (and Clean map) need the full package, with the map layers"
+      "description": "The map's colours and markers. Original is the game's own map; the other themes (and Clean map) need the full package, with the map layers"
     },
     {
       "id": "clean",

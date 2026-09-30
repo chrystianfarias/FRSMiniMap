@@ -11,9 +11,7 @@ legend's filters, the GPS route, the other racers.
 ## What it does
 
 - **The map in perspective**, framed by each track's own calibration
-  (`TrackInfo`), for free roam and every race. With the "NFSU2 Detailed Map"
-  zip in the mod's folder it uses its redrawn maps (2048 px), read straight
-  out of the zip; without it, the game's own (512 px).
+  (`TrackInfo`), for free roam and every race.
 - **Turns with the camera**, GTA-style (or with the car), smoothed.
 - **Dynamic zoom**: opens up with speed, down to half the base zoom.
 - **Race starts and shops** as the pause map shows them right now: only what
@@ -37,8 +35,6 @@ legend's filters, the GPS route, the other racers.
 ## Requirements
 
 - **[FRSModLoader](https://github.com/chrystianfarias/FRSModLoader) >= 0.1.2** (required).
-- Optional: the **"NFSU2 Detailed Map v1"** zip by JeansBig, as downloaded,
-  for sharper maps (the mod reads it without extracting it).
 
 ## Downloads
 
@@ -46,7 +42,7 @@ Each release has two packages:
 
 | Package | |
 |---|---|
-| `FRSMiniMap-<version>.zip` | the mod, with the **Original** map only (the Detailed Map's picture, or the game's): its menu has no Theme or Clean map option |
+| `FRSMiniMap-<version>.zip` | the mod, with the **Original** map only (the game's own): its menu has no Theme or Clean map option |
 | `FRSMiniMap-<version>-full.zip` | the mod and the map layers (`maps/layers`, ~50 MB). **Needed for the Google Maps, Google Maps Dark and Waze themes, and for Clean map** |
 
 The themes paint the map from those layers; with the light package they fall
@@ -70,14 +66,10 @@ With the game closed:
      maps\
    ```
 
-3. Optional: put the Detailed Map zip in that same folder, next to
-   `mod.json`, with its name as downloaded
-   (`2d7d87-NFSU2 Detailed Map v1 Reup.zip`).
-4. Start the game. FRSMiniMap shows up in **Options > Mods**, with its
+3. Start the game. FRSMiniMap shows up in **Options > Mods**, with its
    picture, its on/off switch and its options.
 
-From a clone of this repository, `install.ps1` does steps 2 and 3 (it also
-copies a zip lying next to `mod.json`):
+From a clone of this repository, `install.ps1` does step 2:
 
 ```powershell
 .\install.ps1                          # F:\Games\NFSU2
@@ -100,7 +92,7 @@ loader between sessions:
 
 | Option | |
 |---|---|
-| Theme | Original (the Detailed Map's picture), Google Maps, Google Maps Dark or Waze |
+| Theme | Original (the game's own map), Google Maps, Google Maps Dark or Waze |
 | Clean map | only the roads over the game (in a race, only the track): no ground, water or relief, and no outline on a solid edge |
 | 3D buildings | the city's buildings standing on the minimap, each side lit differently (on by default) |
 | Shape | Round (default), or Rectangular as GTA V's |
@@ -149,14 +141,14 @@ bring its own icons. Themes are JSON files in `ui/themes/`:
 }
 ```
 
-`"map": null` keeps the pack's own picture (the Original theme); its `"clean"`
+`"map": null` keeps the game's own map (the Original theme); its `"clean"`
 block is the palette the Clean map option paints the roads with. With Clean
 map on, every theme skips `land`, `landHigh` and `water`. `icons` is
 optional, with paths relative to `ui/themes/`; a kind left out keeps the mod's
 icon. The map is painted from the layers in `maps/layers/`, which
-`tools/map_layers.py` cuts out of the Detailed Map zip (water, relief, streets,
-highways, alleys, the race track and its start lines); a track without layers
-shows the pack's picture.
+`tools/map_layers.py` builds from JeansBig's "NFSU2 Detailed Map" (water,
+relief, streets, highways, alleys, the race track and its start lines); a
+track without layers shows the game's map.
 
 ## 3D buildings
 
@@ -184,7 +176,6 @@ docs/cover.jpg        the cover at the top of this file
 ui/index.html         the page: draws the map, markers, route
 ui/icons/             pin, player arrow and the markers' icons
 maps/calibration.json framing of the redrawn maps the pack recalibrates
-*.zip                 the Detailed Map pack, optional (not in git)
 tools/                minimap_calibrate.py (measures calibration.json);
                       minimap_dev.py (dumps the map data to look at while
                       developing)
@@ -206,10 +197,8 @@ If the mod helps you, you can [buy me a coffee](https://buymeacoffee.com/chrysti
 
 ## Credits
 
-- Redrawn maps: **"NFSU2 Detailed Map"** by JeansBig - not included; drop the
-  pack's zip next to `mod.json`.
-- The themes' map layers (`maps/layers/`) are cut from that pack by
-  `tools/map_layers.py`, and shipped with the mod with its author's leave.
+- The themes' map layers (`maps/layers/`) are built from **"NFSU2 Detailed
+  Map"** by JeansBig.
 - Marker icons (`car`, `flag-checkered`, `house`, `spray-can`, `star`,
   `volume`, `wrench`): **Font Awesome Free** 7, by Fonticons, Inc., under
   [CC BY 4.0](https://fontawesome.com/license/free); the notice is kept in

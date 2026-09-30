@@ -1,6 +1,6 @@
 {
   "name": "Original",
-  "description": "The Detailed Map pack's own picture (or the game's), and the mod's colours",
+  "description": "The game's own map, and the mod's colours",
   "map": null,
   "markers": {
     "player": "#2ecc71",

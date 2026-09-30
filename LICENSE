@@ -63,5 +63,5 @@ Parts that keep their own licenses:
   * Marker icons (car, flag-checkered, house, spray-can, star, volume,
     wrench): Font Awesome Free by Fonticons, Inc., CC BY 4.0
     (https://fontawesome.com/license/free); the notice is kept in each file.
-  * "NFSU2 Detailed Map" by JeansBig: not included. The player drops the
-    pack's zip into the mod's folder, and it stays under its author's terms.
+  * The themes' map layers (maps/layers) are built from "NFSU2 Detailed Map"
+    by JeansBig.

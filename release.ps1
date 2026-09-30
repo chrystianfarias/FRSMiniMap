@@ -12,10 +12,8 @@
         .\release.ps1 -NoZip           leave the folders, skip the .zip files
 
     The player unpacks one into the folder with SPEED2.EXE, over an installed
-    FRSModLoader (0.1.2 or later). The "NFSU2 Detailed Map" zip is never
-    packed: it is JeansBig's, and the player drops it in themselves. The
-    layers come from tools\map_layers.py; without them the full package is
-    not made.
+    FRSModLoader (0.1.2 or later). The layers come from tools\map_layers.py;
+    without them the full package is not made.
 #>
 param(
     [switch]$NoZip
@@ -45,7 +43,7 @@ Waze - and the Clean map option too.
     } else {
         $edition = @"
 THIS IS THE LIGHT PACKAGE: without the map layers, the map is the Original
-one (the Detailed Map's own picture, or the game's), and the Theme and Clean
+one (the game's own), and the Theme and Clean
 map options are not in its menu. The Google Maps, Google Maps Dark and Waze
 themes, and Clean map, need the layers: download FRSMiniMap-$version-full.zip
 instead.
@@ -70,10 +68,7 @@ INSTALL
      folder with SPEED2.EXE, merging with the "scripts" folder that is there.
      The mod ends up in:
          <game>\scripts\FRSModLoader\mods\frsminimap\
-  3. Optional, for sharper maps: download "NFSU2 Detailed Map v1" by JeansBig
-     and put its zip, as downloaded, into that frsminimap folder, next to
-     mod.json. Do not extract it: the mod reads the maps out of the zip.
-  4. Start the game. The options are in Options > Mods > FRSMiniMap.
+  3. Start the game. The options are in Options > Mods > FRSMiniMap.
 
 IN THE GAME
 
@@ -91,6 +86,7 @@ UNINSTALL
 LICENSE
 
   CC BY-NC 4.0 - Copyright (c) 2025 Chrystian Farias. See LICENSE.txt.
+  The themes' map layers are built from "NFSU2 Detailed Map" by JeansBig.
   If the mod helps you: https://buymeacoffee.com/chrystianfarias
 "@ | Set-Content (Join-Path $stage "INSTALL.txt") -Encoding UTF8
 }
