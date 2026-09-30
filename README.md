@@ -46,7 +46,7 @@ Each release has two packages:
 
 | Package | |
 |---|---|
-| `FRSMiniMap-<version>.zip` | the mod. Only the **Original** theme is drawn (the Detailed Map's picture, or the game's) |
+| `FRSMiniMap-<version>.zip` | the mod, with the **Original** map only (the Detailed Map's picture, or the game's): its menu has no Theme or Clean map option |
 | `FRSMiniMap-<version>-full.zip` | the mod and the map layers (`maps/layers`, ~50 MB). **Needed for the Google Maps, Google Maps Dark and Waze themes, and for Clean map** |
 
 The themes paint the map from those layers; with the light package they fall

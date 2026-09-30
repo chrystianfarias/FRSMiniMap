@@ -44,10 +44,11 @@ Waze - and the Clean map option too.
 "@
     } else {
         $edition = @"
-THIS IS THE LIGHT PACKAGE: without the map layers, only the Original theme
-(the Detailed Map's own picture, or the game's) is drawn. The Google Maps,
-Google Maps Dark and Waze themes, and the Clean map option, need the layers:
-download FRSMiniMap-$version-full.zip instead.
+THIS IS THE LIGHT PACKAGE: without the map layers, the map is the Original
+one (the Detailed Map's own picture, or the game's), and the Theme and Clean
+map options are not in its menu. The Google Maps, Google Maps Dark and Waze
+themes, and Clean map, need the layers: download FRSMiniMap-$version-full.zip
+instead.
 "@
     }
     @"
@@ -100,6 +101,15 @@ function New-Package($name, $full) {
     $mod = Join-Path $stage "scripts\FRSModLoader\mods\frsminimap"
     New-Item -ItemType Directory -Force $mod | Out-Null
     Copy-Item (Join-Path $root "mod.json"), (Join-Path $root "main.js"), (Join-Path $root "thumb.jpg") $mod
+    if (-not $full) {
+        # without the layers the theme and Clean map options would do nothing:
+        # the light package's menu does not offer them (main.js then keeps the
+        # Original theme and Clean map off, their defaults)
+        $m = Get-Content (Join-Path $root "mod.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+        $m.settings = @($m.settings | Where-Object { $_.id -ne 'theme' -and $_.id -ne 'clean' })
+        $json = $m | ConvertTo-Json -Depth 20
+        [System.IO.File]::WriteAllText((Join-Path $mod "mod.json"), $json, (New-Object System.Text.UTF8Encoding $false))
+    }
     Copy-Item (Join-Path $root "ui") $mod -Recurse
     Copy-Item (Join-Path $root "legend") $mod -Recurse
     New-Item -ItemType Directory -Force (Join-Path $mod "maps") | Out-Null
