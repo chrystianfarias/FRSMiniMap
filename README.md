@@ -185,7 +185,7 @@ release.ps1           packs a release zip into release/ (not in git)
 
 ## Terms of use
 
-Copyright (c) 2025 Chrystian Farias. Full terms in [LICENSE](LICENSE).
+By Chrystian Farias. Full terms in [LICENSE](LICENSE).
 
 You may use, modify and redistribute this for free, including your own forks
 and derivative mods, as long as you **credit Chrystian Farias** and link back
