@@ -1,0 +1,44 @@
+{
+  "name": "Waze",
+  "map": {
+    "background": "#252d3a",
+    "land": "#252d3a",
+    "landHigh": "#2e3d52",
+    "reliefStrength": 0.7,
+    "water": "#22467a",
+    "alley": "#34485d",
+    "street": "#3e5670",
+    "highway": "#536e89",
+    "casing": "#222f40",
+    "casingStrength": 0.6,
+    "shadow": "#070a10",
+    "shadowStrength": 0.92,
+    "track": "#3fb6ff",
+    "trackCasing": "#0b1a2b",
+    "start": "#ffffff",
+    "startCasing": "#0b1a2b",
+    "fog": "#1b212b",
+    "building": "#46566f"
+  },
+  "markers": {
+    "player": "#33ccff",
+    "rival": "#ff9f1a",
+    "waypoint": "#ff5c8a",
+    "route": "#3fb6ff",
+    "kinds": {
+      "CIRCUIT": "#b388ff",
+      "DRAG": "#33ccff",
+      "STREET": "#4dd0e1",
+      "DRIFT": "#ffd54f",
+      "SPRINT": "#69f0ae",
+      "URL": "#ffb74d",
+      "SUV": "#ff9f1a",
+      "PAINT": "#ff5252",
+      "BODY": "#64ffda",
+      "PERFORMANCE": "#448aff",
+      "CARLOT": "#18ffff",
+      "SPECIALTY": "#ffab40",
+      "GARAGE": "#e040fb"
+    }
+  }
+}

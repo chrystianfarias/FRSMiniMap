@@ -409,3 +409,26 @@ minimap and the expanded map always agree. The page draws the map top-down,
 north up, from the same TRACKMAP, route and markers as the minimap; the camera
 chases its target every animation frame (drag with inertia, wheel zoom towards
 the cursor, WASD/arrows, Q/E, C to centre, Esc/M to close).
+
+### Map layers, for the themes
+
+`tools/map_layers.py` reads every map of the Detailed Map zip (Default
+variant, never Beta) and splits it into grey-level layers, packed in two RGB
+PNGs per map (a canvas premultiplies alpha, so a layer kept in alpha would be
+lost where alpha is 0): `<id>_a.png` water, relief, streets; `<id>_b.png`
+highways, alleys, track; `index.json` the map's kind and its start lines as
+segments `[x1, y1, x2, y2, width]`.
+
+| Layer | How |
+|---|---|
+| water | the pack's teal: blue at least 14 above red, green 8 above red |
+| relief | the terrain is painted in flat steps (41,44,41), (49,52,49), (57,65,57), (74,81,74), (90,101,90); each pixel takes its step, roads and their shadows (14 px around) are filled from the nearest step, water is 0 |
+| free roam roads | neutral greys: highways (222,223,222), streets (132,138,140), alleys #424542 and its DXT twin (66,69,74); the terrain is always a little green (g - r of 3-8) |
+| race roads | every road one purple-grey (57,56,57) / (74,69,74), g at or below r and b; DXT specks filled, the edge taken from the pack's own shading |
+| track | pure white (L 245+) |
+| start lines | short white bars across the track: pairs of close loose ends of the white trace's skeleton, the segment between them white, the bar's thickness measured near its ends; the track is joined again under them |
+
+104 of the 115 maps are races, 11 have no track (4000, 4090-4099). In the
+zoomed drift and drag maps (43xx, 46xx) the start is a grey cut inside a wide
+track, not a bar sticking out, and is not found: there the themes show the cut,
+without a start line of their own.

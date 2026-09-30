@@ -145,7 +145,7 @@ const MINIMAP_OBJECTS = MINIMAP_NAMES.map(feHash).concat(MINIMAP_HASHES);
 for (const p of INDICATOR_PREFIXES)
   for (let n = 0; n <= INDICATOR_MAX; n++) MINIMAP_OBJECTS.push(feHash(p + n));
 
-let hudPackages = {};   // { name: { pkg, objs: [object...] } }
+let hudPackages = {};   // { name: { pkg, objs: [object...], sentinel, sentinelHash } }
 
 // The GPS route. The GPS (0x81CBC0) is an incremental A* (0x4268A0); when it
 // finishes, it hands the route to whoever asked through [[car+0x2C]]+0x4C
@@ -289,19 +289,32 @@ function updateBlock() {
   speed.mem.writeU32(blockTable, n);
 }
 
+// The objects found in a HUD package are only good while that package lives.
+// A load (a race ending, back to free roam) tears the HUD down and builds a
+// new one - often at the very address of the old, so the package pointer
+// alone does not tell them apart, and FEngSetInvisible on the old objects
+// wrote into freed memory: the crash on going back to free roam. So each
+// frame one object is looked up again (the sentinel, the first one found) and
+// the list is rebuilt when it is not the same; and a game state change drops
+// every list.
 function hideOriginalMinimap() {
   if (!blockTried) installBlock();
   for (const name of HUD_PACKAGES) {
     const pkg = speed.call(FE_FIND_PACKAGE, [name], { ret: 'int' }) >>> 0;
     let h = hudPackages[name];
     if (!pkg) { if (h) { delete hudPackages[name]; updateBlock(); } continue; }
-    if (!h || h.pkg !== pkg) {
+    const stale = h && (h.pkg !== pkg || !h.sentinel ||
+      (speed.call(FE_FIND_OBJECT, [name, h.sentinelHash], { ret: 'int' }) >>> 0) !== h.sentinel);
+    if (!h || stale) {
       const objs = [];
+      let sentinel = 0, sentinelHash = 0;
       for (const hash of MINIMAP_OBJECTS) {
         const o = speed.call(FE_FIND_OBJECT, [name, hash], { ret: 'int' }) >>> 0;
-        if (o) addWithChildren(objs, o, 0);
+        if (!o) continue;
+        if (!sentinel) { sentinel = o; sentinelHash = hash; }
+        addWithChildren(objs, o, 0);
       }
-      h = hudPackages[name] = { pkg, objs };
+      h = hudPackages[name] = { pkg, objs, sentinel, sentinelHash };
       updateBlock();
     }
     for (const o of h.objs) {
@@ -517,7 +530,14 @@ function careerVisible() {
   return { races, zones: Object.keys(zones).sort(), off };
 }
 
+// After a game state change the world is still being put together; the
+// career table and the map screen are asked through the game's own functions,
+// which would be handed half-built data.
+const SETTLE_MS = 1500;
+let settleUntil = 0;
+
 function checkCareer(now) {
+  if (now < settleUntil) return;
   if (now - careerLast < CAREER_MS) return;
   careerLast = now;
   const c = careerVisible();
@@ -533,6 +553,18 @@ function checkCareer(now) {
 // (The Portuguese values of development builds are still read, and rewritten at start.)
 function shapeMode() { const v = speed.settings.get('shape', 'round'); return v === 'rectangular' || v === 'retangular' ? 'rectangular' : 'round'; }
 // Its edge: 'fade' (the default, the map fades out) or 'solid'.
+// The minimap's distance from the screen's left and bottom edges, in pixels
+// of a 1080-line screen (the page scales them with the rest).
+function margins() {
+  const px = (id) => { const v = +speed.settings.get(id, 36); return v >= 0 && v <= 400 ? v : 36; };
+  return { left: px('marginLeft'), bottom: px('marginBottom') };
+}
+
+// The map's theme: one of ui/themes/*.json (the page paints the map from
+// maps/layers/ with it); 'original' is the pack's own picture.
+const THEMES = ['original', 'google-light', 'google-dark', 'waze'];
+function themeName() { const v = speed.settings.get('theme', 'original'); return THEMES.indexOf(v) >= 0 ? v : 'original'; }
+
 // The minimap's size, in percent of its size at 1080 lines (the page scales
 // that to the screen first).
 function sizePercent() { const v = +speed.settings.get('size', 100); return v >= 50 && v <= 200 ? v : 100; }
@@ -587,12 +619,34 @@ function closeMap(closeGameMap) {
   }
 }
 
-// The pause menu and its option pages: the minimap stays out of them.
-const PAUSE_PKGS = ['UI_Pause.fng', 'UI_PauseOptions.fng', 'UI_PauseOptionsMain.fng'];
+// The minimap belongs over the race or free-roam HUD and nothing else (and
+// not over a drag race's): it
+// shows only while one of the HUD packages is up (hideOriginalMinimap keeps
+// them in hudPackages) and none of the screens the game puts over it is open -
+// the pause menu and its pages, the event, race, shop and message dialogs, the
+// mailbox, the pre- and post-race screens, replays, movies, loading screens.
+const OVER_HUD = [
+  'UI_Pause.fng', 'UI_PauseOptions.fng', 'UI_PauseOptionsMain.fng',
+  'UI_InGameDialog.fng', 'UI_InGame_WorldMap.fng',
+  'UI_EngageEventDialog.fng', 'UI_EngageMessageDialog.fng', 'UI_EngageRaceDialog.fng', 'UI_EngageShopDialog.fng',
+  'IG_GenericDialog_SMALL.fng', 'IG_GenericDialog_MED.fng', 'IG_GenericDialog_LARGE.fng',
+  'GenericDialog.fng', 'GenericDialog_SMALL.fng', 'GenericDialog_Small.fng', 'GenericDialog_MED.fng',
+  'GenericDialog_LARGE.fng', 'GenericDialog_ThreeButton.fng', 'HelpDialog_SMALL.fng', 'HelpDialog_MED.fng',
+  'HelpDialog_LARGE.fng', 'MU_UG_InGameDialogBox.fng', 'MU_PostRaceConfirm.fng',
+  'UI_SMS_Mailbox.fng', 'UI_SponsorPopup.fng', 'UI_MagazineReward.fng',
+  'PreRaceStats.fng', 'UI_PostRace.fng', 'UI_PostRaceInfo.fng', 'UI_PostRaceResults.fng',
+  'UI_PostRaceReward.fng', 'UI_PostRaceStats.fng', 'UI_PostRace_TournResults.fng',
+  'UI_PostRace_TournStandings.fng', 'UI_PostraceWorldMap.fng',
+  'UI_ReplayControl.fng', 'ui_ReplayControl.fng', 'IG_PlayMovie.fng',
+  'HUD_World_Loading.fng', 'Loading_Tips.fng', 'PC_Loading.fng', 'UI_OLX_InGame_Error.fng'
+];
 let pausedSent = null;
 function checkPause() {
-  const paused = speed.game.state() === 6 &&
-    PAUSE_PKGS.some((p) => (speed.call(FE_PACKAGE_OPEN, [p], { ret: 'int' }) & 0xFF) !== 0);
+  const onHud = Object.keys(hudPackages).length > 0;
+  // a drag race is a straight line: its HUD (HUD_Drag.fng) gets no minimap
+  const drag = !!hudPackages['HUD_Drag.fng'];
+  const paused = speed.game.state() === 6 && (!onHud || drag ||
+    OVER_HUD.some((p) => (speed.call(FE_PACKAGE_OPEN, [p], { ret: 'int' }) & 0xFF) !== 0));
   if (paused === pausedSent) return;
   pausedSent = paused;
   speed.ui.send('paused', paused);
@@ -861,12 +915,28 @@ speed.on('ui:filter', (f) => {
   careerSent = '';
 });
 
+// N cycles the minimap's zoom presets (close, normal, far, top view); the
+// page has them, the choice is kept in the store.
+const KEY_N = 0x4E, ZOOM_PRESETS = 4;
+function zoomPreset() { const v = speed.store.get('zoomPreset', 1); return v >= 0 && v < ZOOM_PRESETS ? v : 1; }
+speed.on('keydown', (e) => {
+  if (!e || e.key !== KEY_N || !pageReady || !visible) return;
+  const next = (zoomPreset() + 1) % ZOOM_PRESETS;
+  speed.store.set('zoomPreset', next);
+  speed.ui.send('zoom-preset', next);
+});
+
 speed.on('ui:ready', () => {
   speed.ui.send('style', iconStyle());
   speed.ui.send('shape', shapeMode());
   speed.ui.send('edge', edgeMode());
   speed.ui.send('size', sizePercent());
+  speed.ui.send('margin', margins());
   speed.ui.send('route-colour', speed.settings.get('routeColour', false) === true);
+  speed.ui.send('theme', themeName());
+  speed.ui.send('clean', speed.settings.get('clean', false) === true);
+  speed.ui.send('buildings', speed.settings.get('buildings', true) !== false);
+  speed.ui.send('zoom-preset', zoomPreset());
   pageReady = true;
   visible = false;           // the page reloaded: send the state again
   track = null;
@@ -886,7 +956,12 @@ function checkTrack() {
   }
   return true;
 }
-speed.on('gamestate', () => { track = null; trail = {}; streetPtr = null; });
+speed.on('gamestate', () => {
+  track = null; trail = {}; streetPtr = null;
+  // nothing found before the change is trusted after it (see hideOriginalMinimap)
+  hudPackages = {}; updateBlock();
+  settleUntil = speed.now() + SETTLE_MS;
+});
 
 speed.on('frame', () => {
   if (speed.game.state() === 6) hideOriginalMinimap();
@@ -927,11 +1002,51 @@ speed.on('settings', () => {
     speed.ui.send('shape', shapeMode());
     speed.ui.send('edge', edgeMode());
     speed.ui.send('size', sizePercent());
+    speed.ui.send('margin', margins());
     speed.ui.send('route-colour', speed.settings.get('routeColour', false) === true);
+    speed.ui.send('theme', themeName());
+    speed.ui.send('clean', speed.settings.get('clean', false) === true);
+    speed.ui.send('buildings', speed.settings.get('buildings', true) !== false);
   }
 });
 
-speed.command('minimap', () => {
+// /minimap pos <x> <y>, /minimap x <n>, /minimap y <n>, /minimap scale <n>:
+// the Left margin, Bottom margin and Size options from the console, kept as
+// if set in Options > Mods, and applied at once. Out of range values are
+// clamped to the options' own ranges.
+const LAYOUT_LIMITS = { marginLeft: [0, 400], marginBottom: [0, 400], size: [50, 200] };
+function setLayout(id, text) {
+  const v = Math.round(Number(text));
+  if (!isFinite(v)) return null;
+  const [lo, hi] = LAYOUT_LIMITS[id];
+  const clamped = Math.min(hi, Math.max(lo, v));
+  speed.settings.set(id, clamped);
+  return clamped;
+}
+function layoutCommand(args) {
+  const sub = (args[0] || '').toLowerCase();
+  const usage = 'minimap pos {white}<x> <y>{/} | x {white}<n>{/} | y {white}<n>{/} | scale {white}<50-200>{/}';
+  let changed = null;
+  if (sub === 'pos') {
+    const x = setLayout('marginLeft', args[1]), y = setLayout('marginBottom', args[2]);
+    if (x === null || y === null) return usage;
+    changed = 'position {green}' + x + ', ' + y + '{/} px';
+  } else if (sub === 'x' || sub === 'y') {
+    const v = setLayout(sub === 'x' ? 'marginLeft' : 'marginBottom', args[1]);
+    if (v === null) return usage;
+    changed = sub + ' {green}' + v + '{/} px';
+  } else if (sub === 'scale' || sub === 'size') {
+    const v = setLayout('size', args[1]);
+    if (v === null) return usage;
+    changed = 'scale {green}' + v + '%{/}';
+  } else return null;
+  if (pageReady) { speed.ui.send('margin', margins()); speed.ui.send('size', sizePercent()); }
+  return 'minimap: ' + changed + ' {gray}(pixels of a 1080p screen, saved){/}';
+}
+
+speed.command('minimap', (args) => {
+  const layout = args && args.length ? layoutCommand(args) : null;
+  if (layout) return layout;
   const p = pose();
   const t = trackInfo();
   if (!p || !t) return 'minimap: {gray}no car (not in a race or free roam){/}';
@@ -949,4 +1064,4 @@ speed.command('minimap', () => {
            '{/} race starts, {white}' + c.zones.length + '{/} shops' : '  career: {gray}no table{/}'; })() +
          (() => { const r = gpsRoute(); return r ? '  gps: {white}' + r.nodes.length + '{/} nodes [' +
            r.nodes.slice(0, 6).map((x) => x.i).join(' ') + (r.nodes.length > 6 ? ' ...' : '') + ']' : '  gps: {gray}no route{/}'; })();
-}, 'minimap - the minimap state (options are in Options > Mods)');
+}, 'minimap [pos <x> <y> | x <n> | y <n> | scale <50-200>] - the state, or move and scale the minimap');

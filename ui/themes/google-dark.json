@@ -1,0 +1,44 @@
+{
+  "name": "Google Maps Dark",
+  "map": {
+    "background": "#162640",
+    "land": "#162640",
+    "landHigh": "#0c3747",
+    "reliefStrength": 1.0,
+    "water": "#000d2a",
+    "alley": "#33485f",
+    "street": "#3d5873",
+    "highway": "#47688b",
+    "casing": "#0a1626",
+    "casingStrength": 0.85,
+    "shadow": "#050b16",
+    "shadowStrength": 0.7,
+    "track": "#8ab4f8",
+    "trackCasing": "#0b1a2b",
+    "start": "#ffffff",
+    "startCasing": "#0b1a2b",
+    "fog": "#0e1a2e",
+    "building": "#2a4468"
+  },
+  "markers": {
+    "player": "#8ab4f8",
+    "rival": "#f28b82",
+    "waypoint": "#f28b82",
+    "route": "#8ab4f8",
+    "kinds": {
+      "CIRCUIT": "#c58af9",
+      "DRAG": "#8ab4f8",
+      "STREET": "#78d9ec",
+      "DRIFT": "#fdd663",
+      "SPRINT": "#81c995",
+      "URL": "#fcad70",
+      "SUV": "#e6a36b",
+      "PAINT": "#f28b82",
+      "BODY": "#81c995",
+      "PERFORMANCE": "#669df6",
+      "CARLOT": "#78d9ec",
+      "SPECIALTY": "#fcad70",
+      "GARAGE": "#c58af9"
+    }
+  }
+}

@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FRSMiniMap harness</title>
+<style>
+  /* a stand-in for the game behind the minimap: a dusk street */
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+  /* ?transparent=1: nothing behind the minimap (with Chrome's
+     --default-background-color=00000000 the picture keeps its alpha) */
+  html.transparent, html.transparent body { background: transparent !important; }
+  body {
+    background:
+      radial-gradient(ellipse at 70% 110%, rgba(255, 170, 80, 0.35), transparent 55%),
+      linear-gradient(180deg, #1b2433 0%, #2c3a4f 38%, #3a3f46 52%, #23272c 53%, #15181c 100%);
+  }
+</style>
+</head>
+<body>
+<script>
+// Runs ui/index.html the way FRSModLoader's shell does - markup and styles
+// in a shadow root, the script with (frsmodloader, root, mod) - and plays the
+// messages main.js would send: the options from the query string, the free
+// roam track, and a car standing on a street for a few seconds so every ease
+// settles. document.title turns to "done" when it has.
+//   ?theme=waze&shape=round&edge=fade&size=100&left=36&bottom=36&style=pin
+//    &clean=0&buildings=1&preset=1&kmh=0&turn=camera&route=0&routeColour=0&seed=7
+const q = new URLSearchParams(location.search);
+if (q.get('transparent') === '1') document.documentElement.classList.add('transparent');
+const opt = (k, d) => q.has(k) ? q.get(k) : d;
+const handlers = {};
+const api = {
+  on: (name, fn) => { (handlers[name] = handlers[name] || []).push(fn); },
+  send: (name) => { if (name === 'ready') start(); },
+  sound: () => true
+};
+const emit = (name, data) => (handlers[name] || []).forEach((fn) => fn(data));
+const mod = { id: 'frsminimap', name: 'FRSMiniMap', url: location.origin + '/ui/index.html' };
+// the city's free roam: TrackInfo 4000 (NOTES.md, "The minimap"); ?track=<id>
+// takes a race, framed by calibration.json, with the car at ?x=&y=&h=
+let TRACK = { id: 4000, region: 'L4RA', ulx: -3424.6, uly: 3287.0, width: 5632.6, zoom: 1.5 };
+
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+
+async function start() {
+  const roads = await fetch('http://nfsu2.data/L4RA/roads.json').then((r) => r.json());
+  if (q.has('track')) {
+    const cal = await fetch('/maps/calibration.json').then((r) => r.json());
+    const c = cal[q.get('track')];
+    TRACK = { id: +q.get('track'), region: 'L4RA', ulx: c.ulx, uly: c.uly, width: c.width, zoom: +opt('zoom', 1) };
+  }
+  // ?area=dense: the downtown blocks where the buildings stand closest
+  const box = opt('area', '') === 'dense' ? [-600, 680, -900, -220] : [-1800, 800, -300, 1900];
+  // a street point in town, from the seed: the same place in every picture
+  const rand = rng(+opt('seed', 7));
+  const town = roads.lines.filter((l) => l.c === 'street' && l.p.length >= 8);
+  let line, i, x, y;
+  for (let tries = 0; tries < 200; tries++) {
+    line = town[Math.floor(rand() * town.length)];
+    i = 2 * Math.floor(rand() * (line.p.length / 2 - 2));
+    x = line.p[i]; y = line.p[i + 1];
+    if (x > box[0] && x < box[1] && y > box[2] && y < box[3]) break;
+  }
+  let h = Math.atan2(line.p[i + 3] - y, line.p[i + 2] - x);         // along the street
+  if (q.has('x')) { x = +q.get('x'); y = +q.get('y'); h = +opt('h', 0); }
+  emit('style', opt('style', 'pin'));
+  emit('shape', opt('shape', 'round'));
+  emit('edge', opt('edge', 'fade'));
+  emit('size', +opt('size', 100));
+  // ?center=1: the minimap in the middle of the screen, whatever its shape and size
+  if (opt('center', '0') === '1') {
+    const rect = opt('shape', 'round') === 'rectangular', k = +opt('size', 100) / 100;
+    const w = (rect ? 340 : 300) * k, hh = (rect ? 214 : 300) * k;
+    emit('margin', { left: (innerWidth - w) / 2, bottom: (innerHeight - hh) / 2 });
+  } else emit('margin', { left: +opt('left', 36), bottom: +opt('bottom', 36) });
+  emit('route-colour', opt('routeColour', '0') === '1');
+  emit('clean', opt('clean', '0') === '1');
+  emit('buildings', opt('buildings', '1') === '1');
+  emit('zoom-preset', +opt('preset', 1));
+  emit('paused', false);
+  emit('theme', opt('theme', 'original'));
+  emit('track', TRACK);
+  emit('career', null);
+  const kmh = +opt('kmh', 0), camera = opt('turn', 'camera') === 'camera';
+  const rivals = [{ x: x + Math.cos(h + 0.5) * 70, y: y + Math.sin(h + 0.5) * 70, h: h + 0.3 },
+                  { x: x - Math.cos(h) * 55, y: y - Math.sin(h) * 55, h }];
+  const pose = () => {
+    const p = { x, y, z: 0, h, rivals };
+    if (camera) p.cam = h + 0.6;          // looking a little aside: the map follows the camera
+    if (opt('dynamic', '1') === '1') p.kmh = kmh;
+    emit('pose', p);
+  };
+  for (let f = 0; f < 240; f++) { pose(); await new Promise((r) => setTimeout(r, 16)); }
+  if (opt('route', '0') === '1') drawRoute(roads, x, y, h);
+  for (let f = 0; f < 30; f++) { pose(); await new Promise((r) => setTimeout(r, 16)); }
+  document.title = 'done';
+}
+
+// A route for the pictures: the streets ahead of the car, drawn straight into
+// the page's route line (the real one comes from the game's GPS).
+function drawRoute(roads, x, y, h) {
+  const root = document.querySelector('.sl-mod').shadowRoot;
+  const k = 512 / TRACK.width;
+  const lines = roads.lines.filter((l) => l.c !== 'alley');
+  const nearest = (px, py, skip) => {
+    let best = null, bd = Infinity;
+    for (const l of lines) {
+      if (skip.has(l)) continue;
+      for (let j = 0; j < l.p.length; j += 2) {
+        const d = (l.p[j] - px) ** 2 + (l.p[j + 1] - py) ** 2;
+        if (d < bd) { bd = d; best = { l, j }; }
+      }
+    }
+    return best;
+  };
+  const pts = [], used = new Set();
+  let at = nearest(x, y, used), dir = 1;
+  // go the way the car faces along its street
+  if (at && at.j + 2 < at.l.p.length) {
+    const vx = at.l.p[at.j + 2] - at.l.p[at.j], vy = at.l.p[at.j + 3] - at.l.p[at.j + 1];
+    dir = vx * Math.cos(h) + vy * Math.sin(h) >= 0 ? 1 : -1;
+  }
+  for (let n = 0; n < 6 && at; n++) {
+    used.add(at.l);
+    const p = at.l.p;
+    for (let j = at.j; j >= 0 && j < p.length; j += 2 * dir) pts.push(p[j], p[j + 1]);
+    const ex = pts[pts.length - 2], ey = pts[pts.length - 1];
+    const next = nearest(ex, ey, used);
+    if (!next || (next.l.p[next.j] - ex) ** 2 + (next.l.p[next.j + 1] - ey) ** 2 > 60 * 60) break;
+    // leave the next street by its longer side
+    dir = next.j < next.l.p.length / 2 ? 1 : -1;
+    at = next;
+  }
+  const d = pts.map((v, n) => n % 2 ? '' : (n ? 'L' : 'M') + ((pts[n] - TRACK.ulx) * k).toFixed(2) + ' ' +
+    ((TRACK.uly - pts[n + 1]) * k).toFixed(2)).join('');
+  root.querySelectorAll('.route-line, .route-edge').forEach((el) => {
+    el.setAttribute('d', d); el.style.strokeDasharray = 'none';
+  });
+  if (opt('routeColour', '0') === '1') root.host.style.setProperty('--route', opt('eventColour', '#9b59b6'));
+}
+
+(async () => {
+  const html = await fetch('/ui/index.html').then((r) => r.text());
+  const host = document.createElement('div');
+  host.className = 'sl-mod';
+  document.body.appendChild(host);
+  const root = host.attachShadow({ mode: 'open' });
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const scripts = [];
+  doc.querySelectorAll('script').forEach((s) => { scripts.push(s.textContent); s.remove(); });
+  doc.head.querySelectorAll('style, link[rel=stylesheet]').forEach((n) => root.appendChild(n.cloneNode(true)));
+  Array.from(doc.body.childNodes).forEach((n) => root.appendChild(n));
+  for (const code of scripts) new Function('frsmodloader', 'root', 'mod', code)(api, root, mod);
+})();
+</script>
+</body>
+</html>

@@ -34,11 +34,22 @@
      times the player's Size option, for the minimap. The minimap is laid out
      at 1080 size and scaled as a whole, so none of its geometry changes. */
   :host { --ui: 1; --mm: 1; }
+  /* The theme's colours (ui/themes/*.json, set on the host by applyTheme):
+     the map's background, the solid edge's fog, the arrows, the route. */
+  :host { --map-bg: #1d2b2f; --fog-rgb: 30, 32, 28; --player: #2ecc71; --rival: #f39c12; --route-base: #00e5ff; }
   .mm {
     --size: 300px;
+    /* No border: the map dissolves at the edges, as in Forza Horizon. Opaque
+       up to 55% of the radius, gone at the rim. */
+    --fade: radial-gradient(closest-side, #000 55%, rgba(0, 0, 0, 0.6) 75%, transparent 100%);
+    /* the far side's fog with the infinite edge: the map itself fades out
+       towards the top (a mask, over the edge fade) */
+    --fog-mask: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.15) 16%,
+                                rgba(0, 0, 0, 0.55) 32%, #000 50%);
     position: absolute;
     /* in place of the game's minimap, which main.js hides */
-    left: calc(36px * var(--ui)); bottom: calc(36px * var(--ui));
+    /* the Left / Bottom margin options, in pixels of a 1080-line screen */
+    left: calc(var(--margin-left, 36px) * var(--ui)); bottom: calc(var(--margin-bottom, 36px) * var(--ui));
     width: var(--size); height: var(--size);
     transform: scale(var(--mm));
     transform-origin: 0 100%;
@@ -56,8 +67,8 @@
                               #000 77.5%, rgba(0, 0, 0, 0.6) 87.5%, transparent 100%);
     --fade-y: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.6) 12.5%, #000 22.5%,
                               #000 77.5%, rgba(0, 0, 0, 0.6) 87.5%, transparent 100%);
-    -webkit-mask-image: var(--fade-x), var(--fade-y);
-    mask-image: var(--fade-x), var(--fade-y);
+    -webkit-mask-image: var(--fade-x), var(--fade-y), var(--fog-mask);
+    mask-image: var(--fade-x), var(--fade-y), var(--fog-mask);
     -webkit-mask-composite: source-in;
     mask-composite: intersect;
   }
@@ -67,20 +78,55 @@
     mask-image: none;
     box-shadow: 0 0 0 2px rgba(6, 10, 12, 0.85), 0 3px 12px rgba(0, 0, 0, 0.5);
   }
-  .mm.solid:not(.rect) .view { border-radius: 50%; }
-  .mm.solid.rect .view { border-radius: 3px; }
+  .mm.solid:not(.rect) .view, .mm.solid:not(.rect) .fog { border-radius: 50%; }
+  .mm.solid.rect .view, .mm.solid.rect .fog { border-radius: 3px; }
 
+  /* Fog over the far side of the map, so the top does not end on a flat cut
+     of the picture. Infinite edge: the map fades out to nothing there (the
+     --fog-mask in .view's mask). Solid edge: it fades into the map's dark grey, on a layer
+     of its own over .view with the same outline (inside .view it shared the
+     3D plane's compositing and flickered). The car, the native circles and
+     the edge pins are drawn above it. */
+  .fog {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    display: none;
+    /* the grey of the map's blocks (#1e201c, the Detailed Map's ground), so
+       the far side sinks into the map rather than into black */
+    background: linear-gradient(to bottom,
+      rgb(var(--fog-rgb)) 0, rgba(var(--fog-rgb), 0.92) 16%, rgba(var(--fog-rgb), 0.55) 32%, rgba(var(--fog-rgb), 0) 50%);
+  }
+  .mm.solid .fog { display: block; }
+  /* Clean: only the roads and the track, over the game itself - no ground,
+     no water, no relief; so no background, no fog layer, and no outline
+     around a solid edge (there is nothing for it to frame). */
+  /* the zoom preset's name, for a moment after N */
+  .zoomtag {
+    position: absolute; left: 50%; bottom: 8%;
+    transform: translateX(-50%);
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: rgba(6, 10, 12, 0.72);
+    color: #fff; font: 600 13px "Segoe UI", Arial, sans-serif; white-space: nowrap;
+    opacity: 0; transition: opacity 0.25s linear;
+    pointer-events: none;
+  }
+  .zoomtag.on { opacity: 1; }
+  /* the 3D buildings, over the tilted plane, inside the view's edge mask */
+  .buildings { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+  .mm.clean .view { background: transparent; }
+  .mm.clean .fog { display: none; }
+  .mm.clean.solid .view { box-shadow: none; }
   .view {
     position: absolute; inset: 0;
     overflow: hidden;
-    background: #1d2b2f;
+    background: var(--map-bg);
     perspective: 420px;
     perspective-origin: 50% 40%;
-    /* No border: the map dissolves at the edges, as in Forza
-       Horizon. Opaque up to 55% of the radius, gone at the rim. */
-    --fade: radial-gradient(closest-side, #000 55%, rgba(0, 0, 0, 0.6) 75%, transparent 100%);
-    -webkit-mask-image: var(--fade);
-    mask-image: var(--fade);
+    -webkit-mask-image: var(--fade), var(--fog-mask);
+    mask-image: var(--fade), var(--fog-mask);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
   }
 
   .plane {
@@ -124,7 +170,7 @@
   .route-edge { stroke: rgba(0, 0, 0, 0.55); stroke-width: 2.6; }
   /* --route: the destination's colour with the "route in the event's colour"
      option, else the GPS's light blue (set on the host by applyFocus) */
-  .route-line { stroke: var(--route, #00e5ff); stroke-width: 1.5; }
+  .route-line { stroke: var(--route, var(--route-base)); stroke-width: 1.5; }
   .ev .disc { fill: var(--c); }
   /* The pin's tip (bottom centre) sits on the rim and points at the target; the
      pin turns around it, and the icon turns back to stay upright. */
@@ -169,9 +215,9 @@
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
   }
   .rival svg { display: block; width: 100%; height: 100%; overflow: visible; }
-  .rival svg path { fill: #f39c12; }
+  .rival svg path { fill: var(--rival); }
   .car svg { display: block; width: 100%; height: 100%; overflow: visible; }
-  .car svg path { fill: #2ecc71; }   /* the player's colour */
+  .car svg path { fill: var(--player); }   /* the player's colour */
   /* in the native style, the game's: PlayerCarIndicator_1 and AIRACERINDICATOR_ */
   .mm.native .car svg path { fill: #30cf30; }
   .mm.native .rival svg path { fill: #cf8030; }
@@ -232,7 +278,7 @@
   .bigroute { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   .bigroute path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
   .bigroute .route-edge { stroke: rgba(0, 0, 0, 0.55); stroke-width: 2.6; }
-  .bigroute .route-line { stroke: var(--route, #00e5ff); stroke-width: 1.5; }
+  .bigroute .route-line { stroke: var(--route, var(--route-base)); stroke-width: 1.5; }
   .bigpin {
     position: absolute; left: 0; top: 0;
     /* the pin, with the viewBox 80 x 72 margin; the tip on the point */
@@ -263,8 +309,8 @@
   }
   .bigarrow svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .bigarrow svg path { stroke: rgba(6, 10, 12, 0.7); stroke-width: 8; paint-order: stroke; stroke-linejoin: round; }
-  .bigarrow.me svg path { fill: #2ecc71; }
-  .bigarrow.rival svg path { fill: #f39c12; }
+  .bigarrow.me svg path { fill: var(--player); }
+  .bigarrow.rival svg path { fill: var(--rival); }
   .big.native .bigarrow.me svg path { fill: #30cf30; }
   .big.native .bigarrow.rival svg path { fill: #cf8030; }
   .bigarrow.rival { width: calc(20px * var(--ui)); height: calc(20px * var(--ui));
@@ -312,10 +358,13 @@
         <div class="bitmap"></div>
       </div>
     </div>
+    <canvas class="buildings" id="buildings"></canvas>
   </div>
+  <div class="fog"></div>
   <div class="flat" id="flat"></div>
   <div class="car"></div>
   <div class="north" id="north"></div>
+  <div class="zoomtag" id="zoomtag"></div>
 </div>
 
 <div class="big" id="big">
@@ -354,7 +403,9 @@
 </div>
 
 <script>
-  const TILT = 58;    // degrees the plane is tilted
+  const TILT = 61;    // degrees the plane is tilted
+  // ...eased towards the zoom preset's (the top view lays it flat)
+  let tiltNow = TILT;
   // Zoom: screen pixels per TRACKMAP pixel (512), before the perspective,
   // times the track's TrackInfo radar factor (1.5 in the city, 2 in drag, 1
   // in drift and Street X). In the city that gives 4.6, the zoom set by eye;
@@ -394,8 +445,13 @@
     SPECIALTY: '#808000', GARAGE: '#5b027d'
   };
   const WAYPOINT_COLOUR = '#d63fd6';   // the player's own marker, in both styles
-  const colourOf = (kind) => kind === 'WAYPOINT' ? WAYPOINT_COLOUR :
-    (iconStyle === 'native' ? NATIVE_COLOUR[kind] : KIND_COLOUR[kind] || SHOP_COLOUR[kind]) || '#ffffff';
+  // the theme (applyTheme) may recolour every kind, the player's marker, the
+  // arrows and the route; the native style keeps the game's own colours
+  let theme = null, themeId = 'original';
+  const themed = (k) => theme && theme.markers ? theme.markers[k] : null;
+  const colourOf = (kind) => kind === 'WAYPOINT' ? (themed('waypoint') || WAYPOINT_COLOUR) :
+    (iconStyle === 'native' ? NATIVE_COLOUR[kind] :
+      (themed('kinds') && themed('kinds')[kind]) || KIND_COLOUR[kind] || SHOP_COLOUR[kind]) || '#ffffff';
   // the icon inside the circle (icons/, Font Awesome Free). Mega Low and the
   // Uniques have no icon yet and are left out.
   const ICON = {
@@ -414,8 +470,12 @@
   const flat = root.getElementById('flat');
   const bitmap = root.querySelector('.bitmap');
   let arrowSvg = '';
-  fetch(new URL('icons/PLAYER.svg', mod.url)).then((r) => r.ok ? r.text() : '')
-    .then((t) => { arrowSvg = t; root.querySelector('.car').innerHTML = t; }).catch(() => {});
+  // the player's arrow: the mod's, or the theme's (icons.PLAYER)
+  function loadArrow(url) {
+    return fetch(url || new URL('icons/PLAYER.svg', mod.url)).then((r) => r.ok ? r.text() : '')
+      .then((t) => { if (!t) return; arrowSvg = t; root.querySelector('.car').innerHTML = t; }).catch(() => {});
+  }
+  loadArrow();
 
   // One element per rival, reused from frame to frame.
   const rivals = [];
@@ -447,13 +507,16 @@
   // itself. Each marker gets a copy of its template; the circle takes the
   // colour from the --c variable.
   const pins = {};
-  async function loadPins() {
-    const text = async (f) => { const r = await fetch(new URL('icons/' + f, mod.url)); return r.ok ? r.text() : ''; };
+  // over: { KIND: url } from the theme (icons, and PIN for the pin itself)
+  async function loadPins(over) {
+    over = over || {};
+    const get = async (u) => { const r = await fetch(u); return r.ok ? r.text() : ''; };
+    const text = (f, key) => get(over[key] || new URL('icons/' + f, mod.url));
     const parse = (t) => new DOMParser().parseFromString(t, 'image/svg+xml').documentElement;
-    const pin = await text('PIN.svg');
+    const pin = await text('PIN.svg', 'PIN');
     for (const [key, file] of Object.entries(ICON)) {
       const base = parse(pin);
-      const icon = parse(await text(file));
+      const icon = parse(await text(file, key));
       const disc = base.querySelector('circle, ellipse');
       const body = base.querySelector('path');      // the pin's white body
       if (body) body.setAttribute('class', 'body');
@@ -652,7 +715,7 @@
   const PERSPECTIVE = 420, CAR_AT = 0.64, EYE_AT = 0.40;
   function project(sx, sy) {
     const W = mm.clientWidth, H = mm.clientHeight;
-    const t = TILT * Math.PI / 180;
+    const t = tiltNow * Math.PI / 180;
     const y = sy * Math.cos(t), z = sy * Math.sin(t);
     if (z <= -PERSPECTIVE * 0.95) return null;
     const f = PERSPECTIVE / (PERSPECTIVE - z);
@@ -773,7 +836,142 @@
   // it, else the game's. Neither replaces a game file.
   // The framing follows the map: the game's uses the TrackInfo, the mod's the
   // calibration.json when the track is in it.
+  // ---- themes ----
+  // A theme (ui/themes/<id>.json) repaints the map from the layers
+  // tools/map_layers.py cut out of the Detailed Map pack (maps/layers/):
+  //   <id>_a.png  R water, G relief, B streets
+  //   <id>_b.png  R highways, G alleys, B track
+  //   index.json  per map, its kind and the start lines as segments
+  // Painted once per theme and track, on a 2048 canvas, and kept as a blob URL.
+  // "map": null (the original theme), or a track without layers, falls back
+  // to the pack's picture or the game's.
+  const LAYERS = new URL('../maps/layers/', mod.url);
+  const layerIndex = fetch(new URL('index.json', LAYERS)).then((r) => r.ok ? r.json() : {}).catch(() => ({}));
+  const painted = {};
+  const loadImage = (url) => new Promise((ok, fail) => {
+    const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = url;
+  });
+  const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  async function paintMap(id, m, info) {
+    const [ia, ib] = await Promise.all([loadImage(new URL(id + '_a.png', LAYERS)), loadImage(new URL(id + '_b.png', LAYERS))]);
+    const W = ia.width, H = ia.height;
+    const read = (im) => { const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const x = c.getContext('2d'); x.drawImage(im, 0, 0); return x.getImageData(0, 0, W, H).data; };
+    const A = read(ia), B = read(ib);
+    const out = document.createElement('canvas'); out.width = W; out.height = H;
+    const ctx = out.getContext('2d');
+    // one scratch canvas reused for every mask: colour + the layer as alpha
+    const mask = document.createElement('canvas'); mask.width = W; mask.height = H;
+    const mctx = mask.getContext('2d');
+    const buf = mctx.createImageData(W, H), px = buf.data;
+    const fillMask = (colour, alphaOf) => {
+      const [r, g, b] = rgbOf(colour);
+      for (let i = 0; i < px.length; i += 4) { px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = alphaOf(i); }
+      mctx.putImageData(buf, 0, 0);
+      return mask;
+    };
+    const draw = (c, alpha, filter, dx, dy) => {
+      ctx.save(); ctx.globalAlpha = alpha; ctx.filter = filter || 'none';
+      ctx.drawImage(c, dx || 0, dy || 0); ctx.restore();
+    };
+    const ring = (c, r, alpha) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++)
+      if ((dx || dy) && dx * dx + dy * dy <= r * r + 1) draw(c, alpha, 'none', dx, dy); };
+    const clean = !!m.clean;
+    if (!clean) { ctx.fillStyle = m.land; ctx.fillRect(0, 0, W, H); }
+    const rs = m.reliefStrength == null ? 1 : m.reliefStrength;
+    if (!clean) {
+      draw(fillMask(m.landHigh || m.land, (i) => Math.max(0, Math.min(255, (A[i + 1] / 255 - 0.45) / 0.55 * 255 * rs))), 1);
+      draw(fillMask(m.water, (i) => A[i]), 1);
+    }
+    // the shadow under every road and the track: wide and soft, then close in
+    // clean, in a race: the track alone, no streets (nor their shadow)
+    const trackOnly = clean && info && info.kind === 'race';
+    const roadsAll = trackOnly ? (i) => B[i + 2] : (i) => Math.max(A[i + 2], B[i], B[i + 1], B[i + 2]);
+    const ss = m.shadowStrength || 0;
+    if (ss > 0) {
+      fillMask(m.shadow || '#000000', roadsAll);
+      draw(mask, Math.min(1, ss), 'blur(22px)'); draw(mask, Math.min(1, ss * 0.85), 'blur(9px)');
+      draw(mask, Math.min(1, ss * 0.7), 'blur(3.5px)');
+    }
+    if (!trackOnly) {
+      if (m.casing) ring(fillMask(m.casing, (i) => Math.max(A[i + 2], B[i], B[i + 1])), 1, m.casingStrength || 0.7);
+      if (m.alley) draw(fillMask(m.alley, (i) => B[i + 1]), 1);
+      draw(fillMask(m.street, (i) => A[i + 2]), 1);
+      if (m.highway) draw(fillMask(m.highway, (i) => B[i]), 1);
+    }
+    if (info && info.kind === 'race') {
+      if (m.trackCasing) ring(fillMask(m.trackCasing, (i) => B[i + 2]), 2, 0.9);
+      draw(fillMask(m.track || '#ffffff', (i) => B[i + 2]), 1);
+      for (const [x1, y1, x2, y2, w] of info.start || []) {
+        ctx.lineCap = 'butt';
+        if (m.startCasing) { ctx.strokeStyle = m.startCasing; ctx.lineWidth = w + 3;
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+        ctx.strokeStyle = m.start || '#ffffff'; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+    }
+    const blob = await new Promise((ok) => out.toBlob(ok, 'image/png'));
+    return URL.createObjectURL(blob);
+  }
+
+  function applyTheme(id) {
+    themeId = id || 'original';
+    return fetch(new URL('themes/' + themeId + '.json', mod.url)).then((r) => r.ok ? r.json() : null)
+      .catch(() => null).then((t) => {
+        theme = t;
+        const host = root.host || document.documentElement;
+        const mk = (t && t.markers) || {}, mp = (t && t.map) || {};
+        const set = (k, v) => { if (v) host.style.setProperty(k, v); else host.style.removeProperty(k); };
+        set('--player', mk.player); set('--rival', mk.rival); set('--route-base', mk.route);
+        set('--map-bg', mp.background);
+        set('--fog-rgb', mp.fog ? rgbOf(mp.fog).join(', ') : null);
+        // the theme's own icons, relative to its file
+        const icons = {};
+        for (const [k, f] of Object.entries((t && t.icons) || {})) icons[k] = new URL(f, new URL('themes/', mod.url));
+        return Promise.all([loadPins(icons), loadArrow(icons.PLAYER)]);
+      }).then(() => {
+        if (track) pickMap(track.id); else placeEvents();
+        if (bigOn) buildBigMarkers();
+      });
+  }
+  frsmodloader.on('theme', (id) => { if (typeof id === 'string' && id !== themeId) applyTheme(id); });
+  let cleanMap = false;
+  frsmodloader.on('clean', (on) => {
+    on = !!on;
+    mm.classList.toggle('clean', on);
+    if (on === cleanMap) return;
+    cleanMap = on;
+    if (track) pickMap(track.id);
+  });
+
   function pickMap(id) {
+    // clean mode paints only roads and track; the original theme, which has no
+    // map colours of its own, uses its "clean" palette for that
+    const base = theme && (theme.map || (cleanMap && theme.clean));
+    const m = base ? Object.assign({}, base, { clean: cleanMap }) : null;
+    if (m) {
+      const key = themeId + ':' + (cleanMap ? 'clean:' : '') + id;
+      bitmap.style.backgroundImage = 'none';
+      frame = null;
+      const done = (url) => calibrationReady.then(() => {
+        if (!track || track.id !== id) return;
+        frame = calibration[id] || track;
+        bitmap.style.backgroundImage = 'url(' + url + ')';
+        placeEvents();
+        drawRoute();
+      });
+      layerIndex.then((idx) => {
+        const info = idx[String(id)];
+        if (!info) return pickPicture(id);            // no layers for this track
+        if (painted[key]) return done(painted[key]);
+        return paintMap(String(id), m, info).then((url) => { painted[key] = url; done(url); });
+      }).catch(() => pickPicture(id));
+      return;
+    }
+    pickPicture(id);
+  }
+
+  function pickPicture(id) {
     const mine = 'http://nfsu2.tex/mod/' + mod.id + '/maps/TRACKMAP' + id + '.dds';
     const game = 'http://nfsu2.tex/TRACKMAP' + id;
     const use = (url, f) => {
@@ -791,16 +989,239 @@
     img.src = mine;
   }
 
+  // ---- 3D buildings ----
+  // maps/buildings/<region>.json: { buildings: [...] }, each one of
+  //   { p: [x, y, ...], z, h }            a prism: its footprint, base, height
+  //   { parts: [{ p, z, h }, ...] }       prisms stacked (towers, setbacks)
+  //   { mesh: { v: [x, y, z, ...], f: [[i, j, k, ...], ...] } }   anything else
+  // Faces are made once, on load: every edge of a footprint a wall, the
+  // footprint itself a roof, with its outward normal; a mesh keeps its faces.
+  // Each frame only what falls inside the view is drawn, far to near (and in
+  // a building, walls back to front, the roof last), each face lit by its
+  // normal so the sides can be told apart (no outline: the shades alone).
+  const buildCanvas = root.getElementById('buildings');
+  const bctx = buildCanvas.getContext('2d');
+  const CELL = 200;                       // world units per grid cell
+  const LIGHT = (() => { const l = [-0.45, 0.65, 0.62], n = Math.hypot(...l); return l.map((x) => x / n); })();
+  let buildings = null, buildGrid = null, buildRegion = null, buildingsOn = true;
+  function loadBuildings(region) {
+    if (!region || region === buildRegion) return;
+    buildRegion = region; buildings = null; buildGrid = null;
+    fetch(new URL('../maps/buildings/' + region + '.json', mod.url)).then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (buildRegion === region && d) prepareBuildings(d.buildings || []); })
+      .catch(() => {});
+  }
+  function prismFaces(p, z0, h, faces) {
+    const n = p.length / 2;
+    let area = 0;
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; }
+    const ccw = area > 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ax = p[2 * i], ay = p[2 * i + 1], bx = p[2 * j], by = p[2 * j + 1];
+      let nx = by - ay, ny = -(bx - ax);                 // right of a->b: outward when ccw
+      if (!ccw) { nx = -nx; ny = -ny; }
+      const l = Math.hypot(nx, ny) || 1;
+      faces.push({ v: [ax, ay, z0, bx, by, z0, bx, by, z0 + h, ax, ay, z0 + h], n: [nx / l, ny / l, 0] });
+    }
+    const roof = [];
+    for (let i = 0; i < n; i++) roof.push(p[2 * i], p[2 * i + 1], z0 + h);
+    faces.push({ v: roof, n: [0, 0, 1], roof: true });
+  }
+  function prepareBuildings(list) {
+    const out = [];
+    for (const b of list) {
+      const faces = [];
+      let zmin = Infinity;
+      if (b.p) { prismFaces(b.p, b.z, b.h, faces); zmin = b.z; }
+      else if (b.parts) for (const part of b.parts) { prismFaces(part.p, part.z, part.h, faces); zmin = Math.min(zmin, part.z); }
+      else if (b.mesh) {
+        const v = b.mesh.v;
+        for (let i = 2; i < v.length; i += 3) zmin = Math.min(zmin, v[i]);
+        for (const f of b.mesh.f) {
+          const pts = [];
+          for (const k of f) pts.push(v[3 * k], v[3 * k + 1], v[3 * k + 2]);
+          // Newell's normal: good for any planar polygon
+          let nx = 0, ny = 0, nz = 0;
+          for (let i = 0; i < f.length; i++) {
+            const a = 3 * i, c = 3 * ((i + 1) % f.length);
+            nx += (pts[a + 1] - pts[c + 1]) * (pts[a + 2] + pts[c + 2]);
+            ny += (pts[a + 2] - pts[c + 2]) * (pts[a] + pts[c]);
+            nz += (pts[a] - pts[c]) * (pts[a + 1] + pts[c + 1]);
+          }
+          const l = Math.hypot(nx, ny, nz) || 1;
+          faces.push({ v: pts, n: [nx / l, ny / l, nz / l], roof: Math.abs(nz / l) > 0.7, mesh: true });
+        }
+      }
+      if (!faces.length) continue;
+      let cx = 0, cy = 0, c = 0;
+      for (const f of faces) for (let i = 0; i < f.v.length; i += 3) { cx += f.v[i]; cy += f.v[i + 1]; c++; }
+      // heights relative to the building's own foot: the map is flat
+      for (const f of faces) for (let i = 2; i < f.v.length; i += 3) f.v[i] -= zmin;
+      out.push({ cx: cx / c, cy: cy / c, faces });
+    }
+    const grid = new Map();
+    out.forEach((b, i) => {
+      const key = Math.floor(b.cx / CELL) + ',' + Math.floor(b.cy / CELL);
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(i);
+    });
+    buildings = out; buildGrid = grid;
+  }
+  // a point above the plane, like project() for one on it: (sx, sy) on the
+  // plane in px (already turned), sz its height in the same px
+  function project3(sx, sy, sz, W, H) {
+    const t = tiltNow * Math.PI / 180, c = Math.cos(t), sn = Math.sin(t);
+    const y = sy * c - sz * sn, z = sy * sn + sz * c;
+    if (z >= PERSPECTIVE * 0.95) return null;
+    const f = PERSPECTIVE / (PERSPECTIVE - z);
+    return [W / 2 + sx * f, (H * CAR_AT + y - H * EYE_AT) * f + H * EYE_AT, z];
+  }
+  const shadeOf = (rgb, k) => 'rgb(' + rgb.map((x) => Math.round(Math.min(255, x * k))).join(',') + ')';
+  function drawBuildings(p, s, r) {
+    const W = mm.clientWidth, H = mm.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    if (buildCanvas.width !== Math.round(W * dpr) || buildCanvas.height !== Math.round(H * dpr)) {
+      buildCanvas.width = Math.round(W * dpr); buildCanvas.height = Math.round(H * dpr);
+    }
+    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bctx.clearRect(0, 0, W, H);
+    if (!buildingsOn || !buildings || !frame) return;
+    const k = 512 * Q / frame.width * s;                  // screen px per world unit
+    const cr = Math.cos(r * Math.PI / 180), sr = Math.sin(r * Math.PI / 180);
+    const toPlane = (x, y) => {                           // world -> turned plane px, from the car
+      const dx = (x - p.x) * k, dy = -(y - p.y) * k;
+      return [dx * cr - dy * sr, dx * sr + dy * cr];
+    };
+    // the cells around the car that can be seen: the view's reach, generous
+    // ahead where the perspective opens it up
+    const reach = Math.max(W, H) * 2.2 / k;
+    const c0x = Math.floor((p.x - reach) / CELL), c1x = Math.floor((p.x + reach) / CELL);
+    const c0y = Math.floor((p.y - reach) / CELL), c1y = Math.floor((p.y + reach) / CELL);
+    const seen = [];
+    for (let gx = c0x; gx <= c1x; gx++) for (let gy = c0y; gy <= c1y; gy++) {
+      const cell = buildGrid.get(gx + ',' + gy);
+      if (!cell) continue;
+      for (const i of cell) {
+        const b = buildings[i];
+        const [sx, sy] = toPlane(b.cx, b.cy);
+        const q = project3(sx, sy, 0, W, H);
+        if (!q || q[0] < -W * 0.4 || q[0] > W * 1.4 || q[1] < -H * 0.6 || q[1] > H * 1.4) continue;
+        seen.push({ b, d: q[2] });
+      }
+    }
+    seen.sort((a, b) => a.d - b.d);                      // far (more negative z) first
+    const base = rgbOf(((theme && theme.map) || (theme && theme.buildings) || {}).building || '#6b6f75');
+    // the light, turned with the plane: a face's shade holds still on screen
+    const lx = LIGHT[0] * cr - (-LIGHT[1]) * sr, ly = LIGHT[0] * sr + (-LIGHT[1]) * cr, lz = LIGHT[2];
+    const tr = tiltNow * Math.PI / 180, tc = Math.cos(tr), ts = Math.sin(tr);
+    for (const { b } of seen) {
+      const faces = [];
+      for (const f of b.faces) {
+        const pts = [];
+        let dz = 0, ok = true, vx = 0, vy = 0, vz = 0;
+        for (let i = 0; i < f.v.length; i += 3) {
+          const [sx, sy] = toPlane(f.v[i], f.v[i + 1]);
+          const sz = f.v[i + 2] * k;
+          const q = project3(sx, sy, sz, W, H);
+          if (!q) { ok = false; break; }
+          pts.push(q[0], q[1]); dz += q[2];
+          if (i === 0) { vx = sx; vy = H * CAR_AT + (sy * tc - sz * ts) - H * EYE_AT; vz = q[2]; }
+        }
+        if (!ok) continue;
+        // the normal, turned and tilted like the points
+        const px = f.n[0] * cr - (-f.n[1]) * sr, py = f.n[0] * sr + (-f.n[1]) * cr, pz = f.n[2];
+        const ny = py * tc - pz * ts, nz = py * ts + pz * tc;
+        // towards the eye (0, 0, PERSPECTIVE) from the face: a prism's side
+        // that looks away is not drawn; a mesh's faces, whose winding the data
+        // does not promise, are drawn from both sides
+        const toEye = px * -vx + ny * -vy + nz * (PERSPECTIVE - vz);
+        if (!f.mesh && !f.roof && toEye <= 0) continue;
+        let light = px * lx + py * ly + pz * lz;
+        if (f.mesh) light = Math.abs(light);
+        const shade = f.roof ? 1.12 : 0.5 + 0.45 * Math.max(0, light);
+        faces.push({ pts, d: dz / (f.v.length / 3), fill: shadeOf(base, shade), roof: !!f.roof });
+      }
+      faces.sort((a, b) => (a.roof - b.roof) || (a.d - b.d));
+      for (const f of faces) {
+        bctx.beginPath();
+        bctx.moveTo(f.pts[0], f.pts[1]);
+        for (let i = 2; i < f.pts.length; i += 2) bctx.lineTo(f.pts[i], f.pts[i + 1]);
+        bctx.closePath();
+        bctx.fillStyle = f.fill;
+        bctx.fill();
+      }
+    }
+  }
+  frsmodloader.on('buildings', (on) => { buildingsOn = !!on; if (!buildingsOn) bctx.clearRect(0, 0, buildCanvas.width, buildCanvas.height); });
+
   // The heading comes in radians on the world plane: 0 = +x, pi/2 = +y (north).
   // On the map y is flipped, so the car's front points to -h on screen,
   // and turning the plane by h - 90 degrees puts the front up.
+  // ---- zoom presets (N) ----
+  // close, normal, far, and a top view: flat, north up; in a race it frames
+  // the whole map (the race's map is framed on its route), in free roam it
+  // opens only so far. Everything eases there, and the car moves off the
+  // centre when the top view of a race centres on the map instead.
+  const PRESETS = [
+    { name: 'Close', zoom: 3.0, tilt: TILT },
+    { name: 'Normal', zoom: 1.0, tilt: TILT },
+    { name: 'Far', zoom: 0.55, tilt: TILT },
+    { name: 'Top view', zoom: 0.3, tilt: 0, top: true }
+  ];
+  const PRESET_EASE = 0.12;
+  let preset = 1, presetZoom = 1, topBlend = 0;
+  const zoomTag = root.getElementById('zoomtag');
+  let zoomTagTimer = 0;
+  frsmodloader.on('zoom-preset', (i) => {
+    if (typeof i !== 'number' || !PRESETS[i]) return;
+    const changed = i !== preset;
+    preset = i;
+    if (!changed) return;
+    zoomTag.textContent = PRESETS[i].name;
+    zoomTag.classList.add('on');
+    clearTimeout(zoomTagTimer);
+    zoomTagTimer = setTimeout(() => zoomTag.classList.remove('on'), 1200);
+  });
+
+  // The race track's extent in ground px of the map in use: the index has it in
+  // image px of the pack's map, framed by calibration.json (or the TrackInfo);
+  // through the world it lands right on either map, the pack's or the game's.
+  let trackBoxes = {};
+  layerIndex.then((idx) => { trackBoxes = idx; });
+  function trackBox() {
+    const info = track && trackBoxes[String(track.id)];
+    if (!info || !info.bbox || !frame) return null;
+    const src = calibration[track.id] || track;           // the pack map's framing
+    const IMG = 2048;
+    const toWorld = (px, py) => ({ x: src.ulx + px / IMG * src.width, y: src.uly - py / IMG * src.width });
+    const a = toGround(toWorld(info.bbox[0], info.bbox[1]).x, toWorld(info.bbox[0], info.bbox[1]).y);
+    const b = toGround(toWorld(info.bbox[2], info.bbox[3]).x, toWorld(info.bbox[2], info.bbox[3]).y);
+    const w = Math.max(8, Math.abs(b.gx - a.gx)), h = Math.max(8, Math.abs(b.gy - a.gy));
+    return { cx: (a.gx + b.gx) / 2, cy: (a.gy + b.gy) / 2, w, h };
+  }
+
+  // ground px back to the world, for what measures from the view's focus
+  function focusWorld(gx, gy) {
+    const k = 512 * Q / frame.width;
+    return { x: frame.ulx + gx / k, y: frame.uly - gy / k };
+  }
+
   function place(p) {
-    const { gx, gy } = toGround(p.x, p.y);
+    const car = toGround(p.x, p.y);
+    const P = PRESETS[preset];
+    const isRaceMap = track && track.id !== FREE_ROAM;
+    // the top view of a race: the whole map in view, centred on it
+    const fitTop = P.top && isRaceMap;
+    topBlend += ((fitTop ? 1 : 0) - topBlend) * PRESET_EASE;
+    tiltNow += (P.tilt - tiltNow) * PRESET_EASE;
+    if (Math.abs(P.tilt - tiltNow) < 0.01) tiltNow = P.tilt;
     // The radar turns with the camera (p.cam, when main.js has it) or with the car.
     // Turning with the camera, the player's arrow turns by the difference between
     // the car's heading and the camera's: looking sideways, it points where the
     // car is going.
-    const want = typeof p.cam === 'number' ? p.cam : p.h;
+    // the top view is north up
+    const want = P.top ? Math.PI / 2 : typeof p.cam === 'number' ? p.cam : p.h;
     if (turnNow === null) turnNow = want;
     else {
       let d = want - turnNow;
@@ -810,22 +1231,46 @@
     const turn = turnNow;
     const r = turn * 180 / Math.PI - 90;
     const carTurn = (turn - p.h) * 180 / Math.PI;
-    const carRot = Math.abs(carTurn) < 0.05 ? '' : 'rotate(' + carTurn.toFixed(2) + 'deg)';
-    if (carEl.style.transform !== carRot) carEl.style.transform = carRot;
     // screen pixels per .ground pixel
-    const kmh = typeof p.kmh === 'number' ? p.kmh : 0;
+    const kmh = typeof p.kmh === 'number' && !P.top ? p.kmh : 0;   // no speed zoom in the top view
     const t = Math.min(1, Math.max(0, (kmh - ZOOM_FROM) / (ZOOM_TO - ZOOM_FROM)));
     zoomNow += ((1 - t * (1 - ZOOM_OUT)) - zoomNow) * ZOOM_EASE;
-    const s = MAP_PX * track.zoom * zoomNow / Q;
+    const W = mm.clientWidth, H = mm.clientHeight;
+    const sNormal = MAP_PX * track.zoom * zoomNow / Q;
+    // a race's top view frames the track: its extent from the layer index
+    // (image px of the pack's map, turned to ground px of the map in use),
+    // or the whole map when there is none
+    const box = fitTop ? trackBox() : null;
+    const sFit = box ? Math.min(W / box.w, H / box.h) * 0.88 : Math.min(W, H) * 0.94 / (512 * Q);
+    const wantZoom = fitTop ? sFit / sNormal : P.zoom;
+    presetZoom += (wantZoom - presetZoom) * PRESET_EASE;
+    const s = sNormal * presetZoom;
+    // the point at the plane's origin (the car's place on screen): the car,
+    // or, for a race's top view, the map's centre - moved down so it lands
+    // in the middle of the view rather than at the car's 64 %
+    const midX = box ? box.cx : 512 * Q / 2, midY = box ? box.cy : 512 * Q / 2;
+    const centreLift = H * (CAR_AT - 0.5) / s;
+    const gx = car.gx + (midX - car.gx) * topBlend;
+    const gy = car.gy + (midY + centreLift - car.gy) * topBlend;
+    // the car itself, where it falls from there
+    let carMove = '';
+    if (topBlend > 0.001) {
+      const cr0 = Math.cos(r * Math.PI / 180), sr0 = Math.sin(r * Math.PI / 180);
+      const dx = (car.gx - gx) * s, dy = (car.gy - gy) * s;
+      const q = project(dx * cr0 - dy * sr0, dx * sr0 + dy * cr0);
+      if (q) carMove = 'translate(' + q.x.toFixed(1) + 'px,' + (q.y - H * (CAR_AT - 0.5)).toFixed(1) + 'px) ';
+    }
+    const carRot = carMove + (Math.abs(carTurn) < 0.05 ? '' : 'rotate(' + carTurn.toFixed(2) + 'deg)');
+    if (carEl.style.transform !== carRot) carEl.style.transform = carRot;
     plane.style.transform =
-      'rotateX(' + TILT + 'deg) scale(' + s + ') rotate(' + r + 'deg) ' +
+      'rotateX(' + tiltNow.toFixed(3) + 'deg) scale(' + s + ') rotate(' + r + 'deg) ' +
       'translate(' + (-gx) + 'px,' + (-gy) + 'px)';
 
     // Each event undoes the plane's turn, scale and tilt: it stands upright on
     // its point, the same size on screen at any zoom, facing the camera.
     // translate(-50%,-100%) puts the pin's base on the point.
     // the pin rests its tip on the point; the native circle, its centre
-    const stand = 'scale(' + (1 / s) + ') rotate(' + (-r) + 'deg) rotateX(' + (-TILT) + 'deg) ' +
+    const stand = 'scale(' + (1 / s) + ') rotate(' + (-r) + 'deg) rotateX(' + (-tiltNow).toFixed(3) + 'deg) ' +
                   'translate(-50%,-100%)';
     const pinLift = 'translateZ(' + (LIFT / s).toFixed(3) + 'px) ';
     const solid = isSolid();
@@ -847,6 +1292,7 @@
       e.el.style.transform = 'translate(' + q.x.toFixed(1) + 'px,' + q.y.toFixed(1) + 'px) scale(' + q.f.toFixed(3) + ')';
     }
     placeRivals(p.rivals || [], s, r);
+    drawBuildings(focusWorld(gx, gy), s, r);
     placeEdges(gx, gy, s, r);
     const lift = 'translateZ(' + (1.5 / s).toFixed(3) + 'px)';
     if (routeLayer.style.transform !== lift) routeLayer.style.transform = lift;
@@ -1163,6 +1609,7 @@
   frsmodloader.on('track', (t) => {
     const changed = !track || track.id !== t.id;
     track = t;
+    loadBuildings(t.region);
     if (changed) pickMap(t.id);
     placeEvents();
   });
@@ -1188,6 +1635,12 @@
   }
   window.addEventListener('resize', applyScale);
   applyScale();
+  frsmodloader.on('margin', (m) => {
+    if (!m) return;
+    const host = root.host || document.documentElement;
+    if (typeof m.left === 'number') host.style.setProperty('--margin-left', m.left + 'px');
+    if (typeof m.bottom === 'number') host.style.setProperty('--margin-bottom', m.bottom + 'px');
+  });
   frsmodloader.on('size', (pct) => {
     if (typeof pct === 'number' && pct > 0) { sizeMult = pct / 100; applyScale(); }
   });
@@ -1293,7 +1746,8 @@
         (hidden ? '' : '&#10003;') + '</span>' + swatch(colourOf(kind), markup(icon)) +
         '<span class="nfs-row__label">' + name + '</span><span class="nfs-row__value">' + (hidden ? '-' : (count[kind] || 0)) + '</span></li>';
     };
-    const me = iconStyle === 'native' ? '#30cf30' : '#2ecc71', rv = iconStyle === 'native' ? '#cf8030' : '#f39c12';
+    const me = iconStyle === 'native' ? '#30cf30' : themed('player') || '#2ecc71';
+    const rv = iconStyle === 'native' ? '#cf8030' : themed('rival') || '#f39c12';
     const arrow = (c) => arrowSvg.replace('<path', '<path fill="' + c + '"').replace('fill="white"', '');
     legendEl.innerHTML =
       '<li class="nfs-row nfs-row--head">' + swatch(me, arrow(me), ' arrow') + '<span class="nfs-row__label">Your car</span></li>' +

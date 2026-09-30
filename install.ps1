@@ -28,8 +28,14 @@ $dest = Join-Path $mods "frsminimap"
 New-Item -ItemType Directory -Force $dest | Out-Null
 Copy-Item (Join-Path $root "mod.json"), (Join-Path $root "main.js"), (Join-Path $root "thumb.jpg") $dest -Force
 Copy-Item (Join-Path $root "ui") $dest -Recurse -Force
+# the pictures of Options > Mods (tools\demo\shoot.py makes them)
+# replaced, not merged: a picture that is gone from the repo goes from the game too
+$legend = Join-Path $dest "legend"
+if (Test-Path $legend) { Remove-Item $legend -Recurse -Force }
+Copy-Item (Join-Path $root "legend") $dest -Recurse -Force
 New-Item -ItemType Directory -Force (Join-Path $dest "maps") | Out-Null
-Copy-Item (Join-Path $root "maps\*") (Join-Path $dest "maps") -Force
+# calibration.json and the themes' layers (maps\layers, from tools\map_layers.py)
+Copy-Item (Join-Path $root "maps\*") (Join-Path $dest "maps") -Recurse -Force
 
 # The "NFSU2 Detailed Map" zip, as downloaded, next to mod.json: the mod reads
 # the maps straight out of it (FRSModLoader's GameTextures looks inside the zips

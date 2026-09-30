@@ -3,6 +3,9 @@
 # publish. Loose .dds maps in maps/ also work, and are not ours either.
 *.zip
 maps/*.dds
+# tools/map_layers.py's output, cut from that pack: 50 MB, made again from
+# the zip in a minute, and shipped in the release rather than in git
+maps/layers/
 
 # tools/minimap_dev.py output
 build/

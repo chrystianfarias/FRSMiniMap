@@ -14,6 +14,73 @@
       "label": "Minimap"
     },
     {
+      "id": "theme",
+      "type": "choice",
+      "label": "Theme",
+      "default": "original",
+      "options": [
+        {
+          "value": "original",
+          "label": "Original",
+          "image": "legend/theme-original.png"
+        },
+        {
+          "value": "google-light",
+          "label": "Google Maps",
+          "image": "legend/theme-google-light.png"
+        },
+        {
+          "value": "google-dark",
+          "label": "Google Maps Dark",
+          "image": "legend/theme-google-dark.png"
+        },
+        {
+          "value": "waze",
+          "label": "Waze",
+          "image": "legend/theme-waze.png"
+        }
+      ],
+      "description": "The map's colours and markers. Original is the Detailed Map's own picture; the other themes (and Clean map) need the full package, with the map layers"
+    },
+    {
+      "id": "clean",
+      "type": "choice",
+      "label": "Clean map",
+      "default": false,
+      "description": "Only the roads over the game (in a race, only the track): no ground, water or relief, and no outline on a solid edge",
+      "options": [
+        {
+          "value": false,
+          "label": "No",
+          "image": "legend/clean-off.png"
+        },
+        {
+          "value": true,
+          "label": "Yes",
+          "image": "legend/clean-on.png"
+        }
+      ]
+    },
+    {
+      "id": "buildings",
+      "type": "choice",
+      "label": "3D buildings",
+      "default": true,
+      "description": "The city's buildings standing up on the minimap, lit so their sides can be told apart",
+      "options": [
+        {
+          "value": false,
+          "label": "No",
+          "image": "legend/buildings-off.png"
+        },
+        {
+          "value": true,
+          "label": "Yes",
+          "image": "legend/buildings-on.png"
+        }
+      ]
+    },
+    {
       "id": "shape",
       "type": "choice",
       "label": "Shape",
@@ -21,11 +88,13 @@
       "options": [
         {
           "value": "round",
-          "label": "Round"
+          "label": "Round",
+          "image": "legend/shape-round.png"
         },
         {
           "value": "rectangular",
-          "label": "Rectangular"
+          "label": "Rectangular",
+          "image": "legend/shape-rectangular.png"
         }
       ],
       "description": "Round, or rectangular as GTA V's"
@@ -38,11 +107,13 @@
       "options": [
         {
           "value": "fade",
-          "label": "Infinite"
+          "label": "Infinite",
+          "image": "legend/edge-fade.png"
         },
         {
           "value": "solid",
-          "label": "Solid"
+          "label": "Solid",
+          "image": "legend/edge-solid.png"
         }
       ],
       "description": "Infinite: the map fades out at the edges. Solid: a clear border with an outline"
@@ -59,6 +130,28 @@
       "description": "The minimap's size. It already follows the screen resolution; this scales it further"
     },
     {
+      "id": "marginLeft",
+      "type": "range",
+      "label": "Left margin",
+      "min": 0,
+      "max": 400,
+      "step": 4,
+      "unit": "px",
+      "default": 36,
+      "description": "Distance from the left edge of the screen (pixels at 1080p, scaled with the resolution)"
+    },
+    {
+      "id": "marginBottom",
+      "type": "range",
+      "label": "Bottom margin",
+      "min": 0,
+      "max": 400,
+      "step": 4,
+      "unit": "px",
+      "default": 36,
+      "description": "Distance from the bottom edge of the screen (pixels at 1080p, scaled with the resolution)"
+    },
+    {
       "id": "icons",
       "type": "choice",
       "label": "Icons",
@@ -66,11 +159,13 @@
       "options": [
         {
           "value": "pin",
-          "label": "Pins"
+          "label": "Pins",
+          "image": "legend/icons-pin.png"
         },
         {
           "value": "native",
-          "label": "Native"
+          "label": "Native",
+          "image": "legend/icons-native.png"
         }
       ],
       "description": "Pins with the mod's icons and colours, or the game's own circles and colours"
@@ -83,11 +178,13 @@
       "options": [
         {
           "value": "camera",
-          "label": "Camera"
+          "label": "Camera",
+          "image": "legend/turn-camera.png"
         },
         {
           "value": "car",
-          "label": "Car"
+          "label": "Car",
+          "image": "legend/turn-car.png"
         }
       ],
       "description": "The map turns with the camera (as in GTA) or with the car"
@@ -103,12 +200,22 @@
     },
     {
       "id": "routeColour",
-      "type": "toggle",
+      "type": "choice",
       "label": "Route in the event's colour",
       "default": false,
-      "on": "Yes",
-      "off": "No",
-      "description": "The GPS route takes the colour of its destination's marker instead of the light blue"
+      "description": "The GPS route takes the colour of its destination's marker instead of the light blue",
+      "options": [
+        {
+          "value": false,
+          "label": "No",
+          "image": "legend/route-colour-off.png"
+        },
+        {
+          "value": true,
+          "label": "Yes",
+          "image": "legend/route-colour-on.png"
+        }
+      ]
     },
     {
       "type": "section",

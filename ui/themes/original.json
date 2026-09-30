@@ -1,0 +1,42 @@
+{
+  "name": "Original",
+  "description": "The Detailed Map pack's own picture (or the game's), and the mod's colours",
+  "map": null,
+  "markers": {
+    "player": "#2ecc71",
+    "rival": "#f39c12",
+    "waypoint": "#d63fd6",
+    "route": "#00e5ff",
+    "kinds": {
+      "CIRCUIT": "#9b59b6",
+      "DRAG": "#2980b9",
+      "STREET": "#3498db",
+      "DRIFT": "#f1c40f",
+      "SPRINT": "#2ecc71",
+      "URL": "#beb42d",
+      "SUV": "#cf8030",
+      "PAINT": "#c0392b",
+      "BODY": "#16a085",
+      "PERFORMANCE": "#2980b9",
+      "CARLOT": "#3498db",
+      "SPECIALTY": "#f39c12",
+      "GARAGE": "#8e44ad"
+    }
+  },
+  "clean": {
+    "alley": "#424542",
+    "street": "#5a595a",
+    "highway": "#dedfde",
+    "casing": "#101010",
+    "casingStrength": 0.6,
+    "shadow": "#000000",
+    "shadowStrength": 0.85,
+    "track": "#ffffff",
+    "trackCasing": "#000000",
+    "start": "#ffffff",
+    "startCasing": "#000000"
+  },
+  "buildings": {
+    "building": "#6b6f75"
+  }
+}
